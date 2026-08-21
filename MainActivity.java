@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        webView.setBackgroundColor(Color.WHITE);
+       webView.setBackgroundColor(Color.rgb(255, 235, 0)); 
         webView.setVisibility(View.INVISIBLE);
 
         // BARRA DE CARGA
