@@ -8,8 +8,6 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -23,178 +21,114 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private FrameLayout splashView;
+    private boolean pageLoaded = false;
 
-    private final Handler handler =
-            new Handler(Looper.getMainLooper());
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
-        setTheme(R.style.AppTheme);
         super.onCreate(savedInstanceState);
 
         // BARRA SUPERIOR OSCURA + ICONOS BLANCOS
         Window window = getWindow();
         window.setStatusBarColor(Color.rgb(20, 24, 28));
+        window.getDecorView().setSystemUiVisibility(0);
 
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-
-            WindowInsetsController controller =
-                    window.getInsetsController();
-
-            if (controller != null) {
-
-                controller.show(
-                        WindowInsets.Type.statusBars()
-                );
-
-                controller.setSystemBarsAppearance(
-                        0,
-                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                );
-            }
-
-        } else {
-
-            window.getDecorView().setSystemUiVisibility(0);
-        }
-
-        // CONTENEDOR PRINCIPAL AMARILLO
+        // CONTENEDOR PRINCIPAL
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(
-                Color.rgb(255, 196, 0)
-        );
+        root.setBackgroundColor(Color.rgb(255, 196, 0));
 
         // WEBVIEW
         webView = new WebView(this);
 
-        webView.setLayoutParams(
-                new FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                )
-        );
+        webView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
 
-        // Evita pantalla blanca mientras carga
-        webView.setBackgroundColor(
-                Color.rgb(255, 196, 0)
-        );
-
-        webView.setVisibility(View.INVISIBLE);
+        // Amarillo mientras carga para evitar destello blanco
+        webView.setBackgroundColor(Color.rgb(255, 196, 0));
 
         WebSettings settings = webView.getSettings();
-
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
         // SPLASH AMARILLO
-        FrameLayout splash = new FrameLayout(this);
+        splashView = new FrameLayout(this);
 
-        splash.setBackgroundColor(
-                Color.rgb(255, 196, 0)
-        );
+        splashView.setBackgroundColor(Color.rgb(255, 196, 0));
 
-        splash.setLayoutParams(
-                new FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                )
-        );
+        splashView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
 
         // LOGO
         ImageView logo = new ImageView(this);
-
-        logo.setImageResource(
-                R.mipmap.ic_launcher
-        );
-
-        logo.setScaleType(
-                ImageView.ScaleType.CENTER_INSIDE
-        );
+        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
 
         int logoSize = (int) (
-                180 *
-                getResources()
-                        .getDisplayMetrics()
-                        .density
+                180 * getResources().getDisplayMetrics().density
         );
 
         FrameLayout.LayoutParams logoParams =
-                new FrameLayout.LayoutParams(
-                        logoSize,
-                        logoSize
-                );
+                new FrameLayout.LayoutParams(logoSize, logoSize);
 
         logoParams.gravity = Gravity.CENTER;
 
-        splash.addView(
-                logo,
-                logoParams
-        );
+        splashView.addView(logo, logoParams);
 
-        splashView = splash;
-
-        // ORDEN DE LAS CAPAS
+        // Primero WebView y encima el splash
         root.addView(webView);
-        root.addView(splash);
+        root.addView(splashView);
 
         setContentView(root);
 
-        // CUANDO LA WEB TERMINA DE CARGAR
-        webView.setWebViewClient(
-                new WebViewClient() {
+        webView.setWebViewClient(new WebViewClient() {
 
-                    @Override
-                    public void onPageFinished(
-                            WebView view,
-                            String url
-                    ) {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
 
-                        super.onPageFinished(
-                                view,
-                                url
-                        );
+                pageLoaded = true;
 
-                        handler.postDelayed(
-                                () -> {
+                // La página ya está lista.
+                // Si ya pasaron los 3 segundos, mostramos la web.
+                showWebsite();
+            }
+        });
 
-                                    webView.setBackgroundColor(
-                                            Color.WHITE
-                                    );
+        // A los 3 segundos intentamos quitar el splash.
+        // Si la web todavía carga, el splash permanece.
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                showWebsite();
+            }
+        }, SPLASH_DURATION);
 
-                                    webView.setVisibility(
-                                            View.VISIBLE
-                                    );
-
-                                    splashView.setVisibility(
-                                            View.GONE
-                                    );
-
-                                },
-                                SPLASH_DURATION
-                        );
-                    }
-                }
-        );
-
-        // CARGAR YOSSI HUB
         webView.loadUrl(HOME_URL);
+    }
+
+    private void showWebsite() {
+
+        if (!pageLoaded) {
+            return;
+        }
+
+        webView.setBackgroundColor(Color.WHITE);
+        splashView.setVisibility(View.GONE);
     }
 
     @Override
     public void onBackPressed() {
 
-        if (
-                webView != null &&
-                webView.canGoBack()
-        ) {
-
+        if (webView != null && webView.canGoBack()) {
             webView.goBack();
-
         } else {
-
             super.onBackPressed();
         }
     }
@@ -205,7 +139,6 @@ public class MainActivity extends Activity {
         handler.removeCallbacksAndMessages(null);
 
         if (webView != null) {
-
             webView.destroy();
             webView = null;
         }
