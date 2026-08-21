@@ -51,8 +51,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+
         setTheme(R.style.AppTheme);
+        super.onCreate(savedInstanceState);
+
         splashStartTime = System.currentTimeMillis();
 
         FrameLayout root = new FrameLayout(this);
@@ -61,7 +63,7 @@ public class MainActivity extends Activity {
                 Color.rgb(255, 235, 0)
         );
 
-        // WebView
+        // WEBVIEW
         webView = new WebView(this);
 
         webView.setLayoutParams(
@@ -77,7 +79,7 @@ public class MainActivity extends Activity {
 
         webView.setVisibility(View.INVISIBLE);
 
-        // Barra de progreso
+        // BARRA DE PROGRESO
         progressBar = new ProgressBar(
                 this,
                 null,
@@ -94,7 +96,7 @@ public class MainActivity extends Activity {
         progressBar.setMax(100);
         progressBar.setVisibility(View.GONE);
 
-        // Splash
+        // SPLASH DE YOSSIHUB
         FrameLayout splash = new FrameLayout(this);
 
         splash.setBackgroundColor(
@@ -141,7 +143,7 @@ public class MainActivity extends Activity {
 
         splashView = splash;
 
-        // Orden de las vistas
+        // ORDEN DE LAS CAPAS
         root.addView(webView);
         root.addView(progressBar);
         root.addView(splash);
@@ -150,7 +152,7 @@ public class MainActivity extends Activity {
 
         configureWebView();
 
-        // Cargar la página mientras se muestra el splash
+        // CARGAR YOSSIHUB DETRÁS DEL SPLASH
         if (savedInstanceState == null) {
 
             Uri incoming =
@@ -166,14 +168,15 @@ public class MainActivity extends Activity {
 
         } else {
 
-            webView.restoreState(
-                    savedInstanceState
-            );
-
+            webView.restoreState(savedInstanceState);
             pageVisible = true;
+
+            // En una restauración también intentamos
+            // retirar el splash cuando se cumpla el tiempo.
+            tryHideSplash();
         }
 
-        // Límite de seguridad
+        // SEGURIDAD: NO DEJAR EL SPLASH BLOQUEADO
         handler.postDelayed(
                 this::forceHideSplash,
                 MAX_SPLASH_DURATION
@@ -193,7 +196,7 @@ public class MainActivity extends Activity {
         long remaining =
                 SPLASH_DURATION - elapsed;
 
-        // Todavía no han pasado los 3 segundos
+        // Mantener el logo como mínimo 3 segundos.
         if (remaining > 0) {
 
             handler.postDelayed(
@@ -204,12 +207,12 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // El WebView todavía no está listo
+        // Si la página todavía no está lista,
+        // mantener el splash.
         if (!pageVisible) {
             return;
         }
 
-        // Pequeño margen para que termine de pintar
         handler.postDelayed(
                 this::showWebView,
                 PAGE_RENDER_DELAY
@@ -305,7 +308,6 @@ public class MainActivity extends Activity {
                         );
                     }
 
-                    // Esta es la corrección del destello blanco.
                     @Override
                     public void onPageCommitVisible(
                             WebView view,
@@ -349,14 +351,12 @@ public class MainActivity extends Activity {
 
                         if (
                                 checkSelfPermission(
-                                        Manifest.permission
-                                                .ACCESS_FINE_LOCATION
+                                        Manifest.permission.ACCESS_FINE_LOCATION
                                 )
                                         == PackageManager.PERMISSION_GRANTED
                                 ||
                                 checkSelfPermission(
-                                        Manifest.permission
-                                                .ACCESS_COARSE_LOCATION
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
                                 )
                                         == PackageManager.PERMISSION_GRANTED
                         ) {
@@ -374,10 +374,8 @@ public class MainActivity extends Activity {
 
                             requestPermissions(
                                     new String[]{
-                                            Manifest.permission
-                                                    .ACCESS_FINE_LOCATION,
-                                            Manifest.permission
-                                                    .ACCESS_COARSE_LOCATION
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
                                     },
                                     LOCATION_REQUEST
                             );
@@ -391,6 +389,7 @@ public class MainActivity extends Activity {
                             FileChooserParams fileChooserParams) {
 
                         if (fileCallback != null) {
+
                             fileCallback.onReceiveValue(
                                     null
                             );
@@ -405,296 +404,4 @@ public class MainActivity extends Activity {
                                     fileChooserParams
                                             .createIntent();
 
-                            startActivityForResult(
-                                    intent,
-                                    FILE_REQUEST
-                            );
-
-                        } catch (
-                                ActivityNotFoundException ex
-                        ) {
-
-                            fileCallback = null;
-
-                            Toast.makeText(
-                                    MainActivity.this,
-                                    "No hay una aplicación disponible para seleccionar el archivo.",
-                                    Toast.LENGTH_LONG
-                            ).show();
-
-                            return false;
-                        }
-
-                        return true;
-                    }
-                }
-        );
-
-        webView.setDownloadListener(
-                (
-                        url,
-                        userAgent,
-                        contentDisposition,
-                        mimeType,
-                        contentLength
-                ) -> {
-
-                    try {
-
-                        startActivity(
-                                new Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse(url)
-                                )
-                        );
-
-                    } catch (Exception e) {
-
-                        Toast.makeText(
-                                this,
-                                "No se pudo abrir la descarga.",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    }
-                }
-        );
-    }
-
-    private boolean routeUrl(Uri uri) {
-
-        if (uri == null) {
-            return false;
-        }
-
-        String scheme =
-                uri.getScheme() == null
-                        ? ""
-                        : uri.getScheme()
-                                .toLowerCase();
-
-        String host =
-                uri.getHost() == null
-                        ? ""
-                        : uri.getHost()
-                                .toLowerCase();
-
-        if (
-                (scheme.equals("https")
-                        || scheme.equals("http"))
-                &&
-                (
-                        host.equals("yossihub.com")
-                                ||
-                        host.equals("www.yossihub.com")
-                                ||
-                        host.endsWith(".netlify.app")
-                )
-        ) {
-
-            return false;
-        }
-
-        if (
-                scheme.equals("https")
-                        ||
-                scheme.equals("http")
-                        ||
-                scheme.equals("mailto")
-                        ||
-                scheme.equals("tel")
-                        ||
-                scheme.equals("sms")
-                        ||
-                scheme.equals("geo")
-                        ||
-                scheme.equals("market")
-                        ||
-                scheme.equals("whatsapp")
-        ) {
-
-            try {
-
-                Intent intent =
-                        new Intent(
-                                Intent.ACTION_VIEW,
-                                uri
-                        );
-
-                startActivity(intent);
-
-            } catch (
-                    ActivityNotFoundException e
-            ) {
-
-                Toast.makeText(
-                        this,
-                        "No se encontró una aplicación para abrir este enlace.",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    @Override
-    public void onRequestPermissionsResult(
-            int requestCode,
-            String[] permissions,
-            int[] grantResults) {
-
-        super.onRequestPermissionsResult(
-                requestCode,
-                permissions,
-                grantResults
-        );
-
-        if (
-                requestCode == LOCATION_REQUEST
-                        &&
-                geoCallback != null
-        ) {
-
-            boolean granted = false;
-
-            for (int result : grantResults) {
-
-                if (
-                        result
-                                == PackageManager
-                                        .PERMISSION_GRANTED
-                ) {
-
-                    granted = true;
-                    break;
-                }
-            }
-
-            geoCallback.invoke(
-                    geoOrigin,
-                    granted,
-                    false
-            );
-
-            geoCallback = null;
-            geoOrigin = null;
-
-            if (
-                    !granted
-                            &&
-                    !shouldShowRequestPermissionRationale(
-                            Manifest.permission
-                                    .ACCESS_FINE_LOCATION
-                    )
-            ) {
-
-                Toast.makeText(
-                        this,
-                        "Puedes activar la ubicación desde Ajustes de YOSSI HUB.",
-                        Toast.LENGTH_LONG
-                ).show();
-            }
-        }
-    }
-
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data) {
-
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
-        );
-
-        if (requestCode == FILE_REQUEST) {
-
-            Uri[] result = null;
-
-            if (resultCode == RESULT_OK) {
-
-                result =
-                        WebChromeClient
-                                .FileChooserParams
-                                .parseResult(
-                                        resultCode,
-                                        data
-                                );
-            }
-
-            if (fileCallback != null) {
-
-                fileCallback.onReceiveValue(
-                        result
-                );
-            }
-
-            fileCallback = null;
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-
-        if (
-                webView != null
-                        &&
-                webView.canGoBack()
-        ) {
-
-            webView.goBack();
-
-        } else {
-
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onSaveInstanceState(
-            Bundle outState) {
-
-        if (webView != null) {
-            webView.saveState(
-                    outState
-            );
-        }
-
-        super.onSaveInstanceState(
-                outState
-        );
-    }
-
-    @Override
-    protected void onDestroy() {
-
-        handler.removeCallbacksAndMessages(
-                null
-        );
-
-        if (webView != null) {
-
-            webView.loadUrl(
-                    "about:blank"
-            );
-
-            webView.stopLoading();
-
-            webView.setWebChromeClient(
-                    null
-            );
-
-            webView.setWebViewClient(
-                    null
-            );
-
-            webView.destroy();
-        }
-
-        super.onDestroy();
-    }
-}
+                           
