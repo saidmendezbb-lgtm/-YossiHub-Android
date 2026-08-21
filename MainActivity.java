@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        setTheme(R.style.AppTheme);
         splashStartTime = System.currentTimeMillis();
 
         FrameLayout root = new FrameLayout(this);
