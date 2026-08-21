@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="SplashTheme" parent="Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/splash_yellow</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_yellow</item>
+    </style>
+
+</resources>
