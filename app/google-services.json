@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "142436645982",
+    "project_id": "yossihub-b9b11",
+    "storage_bucket": "yossihub-b9b11.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:142436645982:android:29e4983aac374fa5b688cf",
+        "android_client_info": {
+          "package_name": "com.yossihub.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8WfkoSRe7Mye3Uq64MoRTKfhh7VoOMwg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
