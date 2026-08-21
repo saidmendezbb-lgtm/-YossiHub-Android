@@ -1,37 +1,94 @@
 package com.yossihub.app;
 
 import android.app.Activity;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowInsetsController;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 
 public class MainActivity extends Activity {
 
+    private static final String HOME_URL = "https://yossihub.com/";
+    private static final long SPLASH_DURATION = 3000;
+
     private WebView webView;
+    private FrameLayout splashView;
+    private long splashStartTime;
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setTheme(R.style.AppTheme);
         super.onCreate(savedInstanceState);
 
-        webView = new WebView(this);
-        setContentView(webView);
+        // BARRA SUPERIOR OSCURA + ICONOS BLANCOS
+        Window window = getWindow();
+        window.setStatusBarColor(Color.rgb(20, 24, 28));
 
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = window.getInsetsController();
 
-        webView.setWebViewClient(new WebViewClient());
-
-        webView.loadUrl("https://yossihub.com/");
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
+            if (controller != null) {
+                controller.setSystemBarsAppearance(
+                        0,
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                );
+            }
         } else {
-            super.onBackPressed();
+            window.getDecorView().setSystemUiVisibility(0);
         }
-    }
-}
+
+        splashStartTime = System.currentTimeMillis();
+
+        // CONTENEDOR PRINCIPAL AMARILLO
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(255, 196, 0));
+
+        // WEBVIEW
+        webView = new WebView(this);
+        webView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        // Amarillo mientras la página todavía no está lista.
+        // Así evitamos el destello blanco.
+        webView.setBackgroundColor(Color.rgb(255, 196, 0));
+        webView.setVisibility(View.INVISIBLE);
+
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+
+        // SPLASH AMARILLO
+        FrameLayout splash = new FrameLayout(this);
+        splash.setBackgroundColor(Color.rgb(255, 196, 0));
+        splash.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+
+        int logoSize = (int) (
+                180 * getResources().getDisplayMetrics().density
+        );
+
+        FrameLayout.LayoutParams logoParams =
+                new FrameLayout.LayoutParams(logoSize, logoSize);
+
+        logoParams.gravity = android.view.Gravity.CENTER;
+        splash.addView
