@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient());
 
-        webView.loadUrl("https://splendorous-cajeta-21569.netlify.app");
+        webView.loadUrl("https://yossihub.com/");
     }
 
     @Override
