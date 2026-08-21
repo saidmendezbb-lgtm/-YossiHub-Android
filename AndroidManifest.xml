@@ -11,7 +11,7 @@
         android:label="YOSSI HUB"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.YossiHub"
+        android:theme="@style/SplashTheme"
         android:usesCleartextTraffic="false">
 
         <activity
