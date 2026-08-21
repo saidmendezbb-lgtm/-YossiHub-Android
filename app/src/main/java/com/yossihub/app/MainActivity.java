@@ -23,7 +23,9 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private FrameLayout splashView;
+
     private boolean pageLoaded = false;
+    private boolean splashTimeElapsed = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -100,15 +102,18 @@ public class MainActivity extends Activity {
                 pageLoaded = true;
 
                 // La página ya está lista.
-                // Si ya pasaron los 3 segundos, mostramos la web.
+                // Solo quitamos el splash cuando también hayan pasado
+                // los 4 segundos.
+                showWebsite();
             }
         });
 
-        // A los 3 segundos intentamos quitar el splash.
+        // A los 4 segundos intentamos quitar el splash.
         // Si la web todavía carga, el splash permanece.
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
+                splashTimeElapsed = true;
                 showWebsite();
             }
         }, SPLASH_DURATION);
@@ -133,7 +138,10 @@ public class MainActivity extends Activity {
 
     private void showWebsite() {
 
-        if (!pageLoaded) {
+        // No mostrar la web hasta que:
+        // 1. La página haya terminado de cargar.
+        // 2. Hayan pasado los 4 segundos del splash.
+        if (!pageLoaded || !splashTimeElapsed) {
             return;
         }
 
