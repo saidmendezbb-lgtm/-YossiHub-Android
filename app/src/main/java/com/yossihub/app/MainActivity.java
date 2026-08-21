@@ -1,11 +1,13 @@
 package com.yossihub.app;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.webkit.WebSettings;
@@ -29,10 +31,13 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Solicitar permiso de notificaciones en Android 13+
+        requestNotificationPermission();
+
         // BARRA SUPERIOR OSCURA + ICONOS BLANCOS
-Window window = getWindow();
-window.setStatusBarColor(Color.rgb(20, 24, 28));
-window.getDecorView().setSystemUiVisibility(0);
+        Window window = getWindow();
+        window.setStatusBarColor(Color.rgb(20, 24, 28));
+        window.getDecorView().setSystemUiVisibility(0);
 
         // CONTENEDOR PRINCIPAL
         FrameLayout root = new FrameLayout(this);
@@ -57,7 +62,6 @@ window.getDecorView().setSystemUiVisibility(0);
 
         // SPLASH AMARILLO
         splashView = new FrameLayout(this);
-
         splashView.setBackgroundColor(Color.rgb(255, 196, 0));
 
         splashView.setLayoutParams(new FrameLayout.LayoutParams(
@@ -77,7 +81,7 @@ window.getDecorView().setSystemUiVisibility(0);
         FrameLayout.LayoutParams logoParams =
                 new FrameLayout.LayoutParams(logoSize, logoSize);
 
-        logoParams.gravity = Gravity.CENTER;
+        logoParams.gravity = android.view.Gravity.CENTER;
 
         splashView.addView(logo, logoParams);
 
@@ -90,8 +94,8 @@ window.getDecorView().setSystemUiVisibility(0);
         webView.setWebViewClient(new WebViewClient() {
 
             @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
+            public void onPageFinished(WebView webView, String url) {
+                super.onPageFinished(webView, url);
 
                 pageLoaded = true;
 
@@ -110,6 +114,21 @@ window.getDecorView().setSystemUiVisibility(0);
         }, SPLASH_DURATION);
 
         webView.loadUrl(HOME_URL);
+    }
+
+    private void requestNotificationPermission() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                requestPermissions(
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        1001
+                );
+            }
+        }
     }
 
     private void showWebsite() {
