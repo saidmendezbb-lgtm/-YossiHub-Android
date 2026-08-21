@@ -17,7 +17,7 @@ import android.widget.ImageView;
 public class MainActivity extends Activity {
 
     private static final String HOME_URL = "https://yossihub.com/";
-    private static final long SPLASH_DURATION = 3000;
+    private static final long SPLASH_DURATION = 4000;
 
     private WebView webView;
     private FrameLayout splashView;
