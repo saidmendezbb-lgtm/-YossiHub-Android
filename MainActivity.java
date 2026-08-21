@@ -10,7 +10,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,8 +31,9 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 2101;
     private static final int FILE_REQUEST = 2102;
 
-    // Duración mínima del splash
     private static final long SPLASH_DURATION = 3000;
+    private static final long PAGE_RENDER_DELAY = 200;
+    private static final long MAX_SPLASH_DURATION = 8000;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -43,6 +43,11 @@ public class MainActivity extends Activity {
 
     private View splashView;
     private long splashStartTime;
+    private boolean pageVisible = false;
+    private boolean splashHidden = false;
+
+    private final Handler handler =
+            new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,27 +57,27 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
 
-        // Fondo amarillo para evitar cualquier destello blanco
-        root.setBackgroundColor(Color.rgb(255, 235, 0));
+        root.setBackgroundColor(
+                Color.rgb(255, 235, 0)
+        );
 
-        // --------------------------------------------------
-        // WEBVIEW
-        // --------------------------------------------------
-
+        // WebView
         webView = new WebView(this);
 
-        webView.setLayoutParams(new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
+        webView.setLayoutParams(
+                new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                )
+        );
 
-        // Oculto mientras aparece el splash
+        webView.setBackgroundColor(
+                Color.rgb(255, 235, 0)
+        );
+
         webView.setVisibility(View.INVISIBLE);
 
-        // --------------------------------------------------
-        // BARRA DE PROGRESO
-        // --------------------------------------------------
-
+        // Barra de progreso
         progressBar = new ProgressBar(
                 this,
                 null,
@@ -89,31 +94,37 @@ public class MainActivity extends Activity {
         progressBar.setMax(100);
         progressBar.setVisibility(View.GONE);
 
-        // --------------------------------------------------
-        // SPLASH PROPIO
-        // --------------------------------------------------
-
+        // Splash
         FrameLayout splash = new FrameLayout(this);
 
-        splash.setBackgroundColor(Color.rgb(255, 235, 0));
+        splash.setBackgroundColor(
+                Color.rgb(255, 235, 0)
+        );
 
-        FrameLayout.LayoutParams splashParams =
+        splash.setLayoutParams(
                 new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
-                );
-
-        splash.setLayoutParams(splashParams);
+                )
+        );
 
         ImageView logo = new ImageView(this);
 
-        logo.setImageResource(R.mipmap.ic_launcher);
-
-        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-
-        int logoSize = (int) (
-                180 * getResources().getDisplayMetrics().density
+        logo.setImageResource(
+                R.mipmap.ic_launcher
         );
+
+        logo.setScaleType(
+                ImageView.ScaleType.CENTER_INSIDE
+        );
+
+        int logoSize =
+                (int) (
+                        180 *
+                        getResources()
+                                .getDisplayMetrics()
+                                .density
+                );
 
         FrameLayout.LayoutParams logoParams =
                 new FrameLayout.LayoutParams(
@@ -123,24 +134,23 @@ public class MainActivity extends Activity {
 
         logoParams.gravity = Gravity.CENTER;
 
-        splash.addView(logo, logoParams);
+        splash.addView(
+                logo,
+                logoParams
+        );
 
         splashView = splash;
 
-        // --------------------------------------------------
-        // ORDEN DE LAS VISTAS
-        // --------------------------------------------------
-
+        // Orden de las vistas
         root.addView(webView);
         root.addView(progressBar);
         root.addView(splash);
 
         setContentView(root);
 
-        // Configuramos el WebView
         configureWebView();
 
-        // Cargamos la página mientras el splash permanece visible
+        // Cargar la página mientras se muestra el splash
         if (savedInstanceState == null) {
 
             Uri incoming =
@@ -156,51 +166,104 @@ public class MainActivity extends Activity {
 
         } else {
 
-            webView.restoreState(savedInstanceState);
+            webView.restoreState(
+                    savedInstanceState
+            );
 
+            pageVisible = true;
         }
 
-        // El splash dura como mínimo 3 segundos
-        new Handler(Looper.getMainLooper()).postDelayed(
-                this::hideSplash,
-                SPLASH_DURATION
+        // Límite de seguridad
+        handler.postDelayed(
+                this::forceHideSplash,
+                MAX_SPLASH_DURATION
         );
     }
 
-    private void hideSplash() {
+    private void tryHideSplash() {
 
-        if (splashView == null) {
+        if (splashHidden) {
             return;
         }
 
         long elapsed =
-                System.currentTimeMillis() - splashStartTime;
+                System.currentTimeMillis()
+                        - splashStartTime;
 
         long remaining =
                 SPLASH_DURATION - elapsed;
 
+        // Todavía no han pasado los 3 segundos
         if (remaining > 0) {
 
-            new Handler(Looper.getMainLooper()).postDelayed(
-                    this::hideSplash,
+            handler.postDelayed(
+                    this::tryHideSplash,
                     remaining
             );
 
             return;
         }
 
-        // Mostrar WebView
-        webView.setVisibility(View.VISIBLE);
+        // El WebView todavía no está listo
+        if (!pageVisible) {
+            return;
+        }
 
-        // Quitar splash
-        splashView.setVisibility(View.GONE);
+        // Pequeño margen para que termine de pintar
+        handler.postDelayed(
+                this::showWebView,
+                PAGE_RENDER_DELAY
+        );
+    }
 
-        splashView = null;
+    private void showWebView() {
+
+        if (splashHidden) {
+            return;
+        }
+
+        splashHidden = true;
+
+        webView.setVisibility(
+                View.VISIBLE
+        );
+
+        if (splashView != null) {
+
+            splashView.setVisibility(
+                    View.GONE
+            );
+
+            splashView = null;
+        }
+    }
+
+    private void forceHideSplash() {
+
+        if (splashHidden) {
+            return;
+        }
+
+        splashHidden = true;
+
+        webView.setVisibility(
+                View.VISIBLE
+        );
+
+        if (splashView != null) {
+
+            splashView.setVisibility(
+                    View.GONE
+            );
+
+            splashView = null;
+        }
     }
 
     private void configureWebView() {
 
-        WebSettings s = webView.getSettings();
+        WebSettings s =
+                webView.getSettings();
 
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -218,120 +281,163 @@ public class MainActivity extends Activity {
                         + " YossiHubAndroid/1.0"
         );
 
-        webView.setWebViewClient(new WebViewClient() {
+        webView.setWebViewClient(
+                new WebViewClient() {
 
-            @Override
-            public boolean shouldOverrideUrlLoading(
-                    WebView view,
-                    WebResourceRequest request) {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(
+                            WebView view,
+                            WebResourceRequest request) {
 
-                return routeUrl(request.getUrl());
-            }
+                        return routeUrl(
+                                request.getUrl()
+                        );
+                    }
 
-            @Override
-            @SuppressWarnings("deprecation")
-            public boolean shouldOverrideUrlLoading(
-                    WebView view,
-                    String url) {
+                    @Override
+                    @SuppressWarnings("deprecation")
+                    public boolean shouldOverrideUrlLoading(
+                            WebView view,
+                            String url) {
 
-                return routeUrl(Uri.parse(url));
-            }
-        });
+                        return routeUrl(
+                                Uri.parse(url)
+                        );
+                    }
 
-        webView.setWebChromeClient(new WebChromeClient() {
+                    // Esta es la corrección del destello blanco.
+                    @Override
+                    public void onPageCommitVisible(
+                            WebView view,
+                            String url) {
 
-            @Override
-            public void onProgressChanged(
-                    WebView view,
-                    int newProgress) {
+                        super.onPageCommitVisible(
+                                view,
+                                url
+                        );
 
-                progressBar.setProgress(newProgress);
+                        pageVisible = true;
 
-                progressBar.setVisibility(
-                        newProgress >= 100
-                                ? View.GONE
-                                : View.VISIBLE
-                );
-            }
-
-            @Override
-            public void onGeolocationPermissionsShowPrompt(
-                    String origin,
-                    GeolocationPermissions.Callback callback) {
-
-                if (
-                        checkSelfPermission(
-                                Manifest.permission.ACCESS_FINE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED
-                        ||
-                        checkSelfPermission(
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED
-                ) {
-
-                    callback.invoke(
-                            origin,
-                            true,
-                            false
-                    );
-
-                } else {
-
-                    geoOrigin = origin;
-                    geoCallback = callback;
-
-                    requestPermissions(
-                            new String[]{
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                            },
-                            LOCATION_REQUEST
-                    );
+                        tryHideSplash();
+                    }
                 }
-            }
+        );
 
-            @Override
-            public boolean onShowFileChooser(
-                    WebView webView,
-                    ValueCallback<Uri[]> filePathCallback,
-                    FileChooserParams fileChooserParams) {
+        webView.setWebChromeClient(
+                new WebChromeClient() {
 
-                if (fileCallback != null) {
-                    fileCallback.onReceiveValue(null);
+                    @Override
+                    public void onProgressChanged(
+                            WebView view,
+                            int newProgress) {
+
+                        progressBar.setProgress(
+                                newProgress
+                        );
+
+                        progressBar.setVisibility(
+                                newProgress >= 100
+                                        ? View.GONE
+                                        : View.VISIBLE
+                        );
+                    }
+
+                    @Override
+                    public void onGeolocationPermissionsShowPrompt(
+                            String origin,
+                            GeolocationPermissions.Callback callback) {
+
+                        if (
+                                checkSelfPermission(
+                                        Manifest.permission
+                                                .ACCESS_FINE_LOCATION
+                                )
+                                        == PackageManager.PERMISSION_GRANTED
+                                ||
+                                checkSelfPermission(
+                                        Manifest.permission
+                                                .ACCESS_COARSE_LOCATION
+                                )
+                                        == PackageManager.PERMISSION_GRANTED
+                        ) {
+
+                            callback.invoke(
+                                    origin,
+                                    true,
+                                    false
+                            );
+
+                        } else {
+
+                            geoOrigin = origin;
+                            geoCallback = callback;
+
+                            requestPermissions(
+                                    new String[]{
+                                            Manifest.permission
+                                                    .ACCESS_FINE_LOCATION,
+                                            Manifest.permission
+                                                    .ACCESS_COARSE_LOCATION
+                                    },
+                                    LOCATION_REQUEST
+                            );
+                        }
+                    }
+
+                    @Override
+                    public boolean onShowFileChooser(
+                            WebView webView,
+                            ValueCallback<Uri[]> filePathCallback,
+                            FileChooserParams fileChooserParams) {
+
+                        if (fileCallback != null) {
+                            fileCallback.onReceiveValue(
+                                    null
+                            );
+                        }
+
+                        fileCallback =
+                                filePathCallback;
+
+                        try {
+
+                            Intent intent =
+                                    fileChooserParams
+                                            .createIntent();
+
+                            startActivityForResult(
+                                    intent,
+                                    FILE_REQUEST
+                            );
+
+                        } catch (
+                                ActivityNotFoundException ex
+                        ) {
+
+                            fileCallback = null;
+
+                            Toast.makeText(
+                                    MainActivity.this,
+                                    "No hay una aplicación disponible para seleccionar el archivo.",
+                                    Toast.LENGTH_LONG
+                            ).show();
+
+                            return false;
+                        }
+
+                        return true;
+                    }
                 }
-
-                fileCallback = filePathCallback;
-
-                try {
-
-                    Intent intent =
-                            fileChooserParams.createIntent();
-
-                    startActivityForResult(
-                            intent,
-                            FILE_REQUEST
-                    );
-
-                } catch (ActivityNotFoundException ex) {
-
-                    fileCallback = null;
-
-                    Toast.makeText(
-                            MainActivity.this,
-                            "No hay una aplicación disponible para seleccionar el archivo.",
-                            Toast.LENGTH_LONG
-                    ).show();
-
-                    return false;
-                }
-
-                return true;
-            }
-        });
+        );
 
         webView.setDownloadListener(
-                (url, userAgent, contentDisposition,
-                 mimeType, contentLength) -> {
+                (
+                        url,
+                        userAgent,
+                        contentDisposition,
+                        mimeType,
+                        contentLength
+                ) -> {
 
                     try {
 
@@ -363,12 +469,14 @@ public class MainActivity extends Activity {
         String scheme =
                 uri.getScheme() == null
                         ? ""
-                        : uri.getScheme().toLowerCase();
+                        : uri.getScheme()
+                                .toLowerCase();
 
         String host =
                 uri.getHost() == null
                         ? ""
-                        : uri.getHost().toLowerCase();
+                        : uri.getHost()
+                                .toLowerCase();
 
         if (
                 (scheme.equals("https")
@@ -376,8 +484,10 @@ public class MainActivity extends Activity {
                 &&
                 (
                         host.equals("yossihub.com")
-                                || host.equals("www.yossihub.com")
-                                || host.endsWith(".netlify.app")
+                                ||
+                        host.equals("www.yossihub.com")
+                                ||
+                        host.endsWith(".netlify.app")
                 )
         ) {
 
@@ -386,13 +496,20 @@ public class MainActivity extends Activity {
 
         if (
                 scheme.equals("https")
-                        || scheme.equals("http")
-                        || scheme.equals("mailto")
-                        || scheme.equals("tel")
-                        || scheme.equals("sms")
-                        || scheme.equals("geo")
-                        || scheme.equals("market")
-                        || scheme.equals("whatsapp")
+                        ||
+                scheme.equals("http")
+                        ||
+                scheme.equals("mailto")
+                        ||
+                scheme.equals("tel")
+                        ||
+                scheme.equals("sms")
+                        ||
+                scheme.equals("geo")
+                        ||
+                scheme.equals("market")
+                        ||
+                scheme.equals("whatsapp")
         ) {
 
             try {
@@ -405,7 +522,9 @@ public class MainActivity extends Activity {
 
                 startActivity(intent);
 
-            } catch (ActivityNotFoundException e) {
+            } catch (
+                    ActivityNotFoundException e
+            ) {
 
                 Toast.makeText(
                         this,
@@ -434,7 +553,8 @@ public class MainActivity extends Activity {
 
         if (
                 requestCode == LOCATION_REQUEST
-                        && geoCallback != null
+                        &&
+                geoCallback != null
         ) {
 
             boolean granted = false;
@@ -443,7 +563,8 @@ public class MainActivity extends Activity {
 
                 if (
                         result
-                                == PackageManager.PERMISSION_GRANTED
+                                == PackageManager
+                                        .PERMISSION_GRANTED
                 ) {
 
                     granted = true;
@@ -463,9 +584,10 @@ public class MainActivity extends Activity {
             if (
                     !granted
                             &&
-                            !shouldShowRequestPermissionRationale(
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                            )
+                    !shouldShowRequestPermissionRationale(
+                            Manifest.permission
+                                    .ACCESS_FINE_LOCATION
+                    )
             ) {
 
                 Toast.makeText(
@@ -496,7 +618,8 @@ public class MainActivity extends Activity {
             if (resultCode == RESULT_OK) {
 
                 result =
-                        WebChromeClient.FileChooserParams
+                        WebChromeClient
+                                .FileChooserParams
                                 .parseResult(
                                         resultCode,
                                         data
@@ -504,7 +627,10 @@ public class MainActivity extends Activity {
             }
 
             if (fileCallback != null) {
-                fileCallback.onReceiveValue(result);
+
+                fileCallback.onReceiveValue(
+                        result
+                );
             }
 
             fileCallback = null;
@@ -516,7 +642,8 @@ public class MainActivity extends Activity {
 
         if (
                 webView != null
-                        && webView.canGoBack()
+                        &&
+                webView.canGoBack()
         ) {
 
             webView.goBack();
@@ -531,20 +658,40 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(
             Bundle outState) {
 
-        webView.saveState(outState);
+        if (webView != null) {
+            webView.saveState(
+                    outState
+            );
+        }
 
-        super.onSaveInstanceState(outState);
+        super.onSaveInstanceState(
+                outState
+        );
     }
 
     @Override
     protected void onDestroy() {
 
+        handler.removeCallbacksAndMessages(
+                null
+        );
+
         if (webView != null) {
 
-            webView.loadUrl("about:blank");
+            webView.loadUrl(
+                    "about:blank"
+            );
+
             webView.stopLoading();
-            webView.setWebChromeClient(null);
-            webView.setWebViewClient(null);
+
+            webView.setWebChromeClient(
+                    null
+            );
+
+            webView.setWebViewClient(
+                    null
+            );
+
             webView.destroy();
         }
 
