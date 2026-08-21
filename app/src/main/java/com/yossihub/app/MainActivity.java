@@ -30,9 +30,17 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         // BARRA SUPERIOR OSCURA + ICONOS BLANCOS
-        Window window = getWindow();
-        window.setStatusBarColor(Color.rgb(20, 24, 28));
-        window.getDecorView().setSystemUiVisibility(0);
+Window window = getWindow();
+window.setStatusBarColor(Color.rgb(20, 24, 28));
+
+if (android.os.Build.VERSION.SDK_INT >= 30) {
+    window.getInsetsController().setSystemBarsAppearance(
+        0,
+        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+    );
+} else {
+    window.getDecorView().setSystemUiVisibility(0);
+}
 
         // CONTENEDOR PRINCIPAL
         FrameLayout root = new FrameLayout(this);
