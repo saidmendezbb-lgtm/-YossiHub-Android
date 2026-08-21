@@ -31,7 +31,7 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 2101;
     private static final int FILE_REQUEST = 2102;
 
-    private static final long SPLASH_DURATION = 3000;
+    private static final long SPLASH_DURATION = 4000;
     private static final long PAGE_RENDER_DELAY = 200;
     private static final long MAX_SPLASH_DURATION = 8000;
 
