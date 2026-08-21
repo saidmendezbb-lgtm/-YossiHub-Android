@@ -97,7 +97,6 @@ public class MainActivity extends Activity {
 
                 // La página ya está lista.
                 // Si ya pasaron los 3 segundos, mostramos la web.
-                showWebsite();
             }
         });
 
