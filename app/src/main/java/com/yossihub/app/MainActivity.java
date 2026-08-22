@@ -52,7 +52,20 @@ private String notificationTarget = "";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+     Intent notificationIntent = getIntent();
 
+if (notificationIntent != null) {
+    String role = notificationIntent.getStringExtra("role");
+    String target = notificationIntent.getStringExtra("target");
+
+    if (role != null) {
+        notificationRole = role;
+    }
+
+    if (target != null) {
+        notificationTarget = target;
+    }
+}
         requestNotificationPermission();
         requestLocationPermission();
         refreshFcmToken();
