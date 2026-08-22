@@ -263,7 +263,11 @@ if (notificationIntent != null) {
                 SPLASH_DURATION
         );
 
-        webView.loadUrl(HOME_URL);
+        if (!notificationTarget.isEmpty()) {
+    webView.loadUrl(notificationTarget);
+} else {
+    webView.loadUrl(HOME_URL);
+}
     }
 
     /*
