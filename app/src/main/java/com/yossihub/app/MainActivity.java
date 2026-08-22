@@ -263,6 +263,11 @@ public class MainActivity extends Activity {
             return false;
         }
 
+        android.widget.Toast.makeText(
+        MainActivity.this,
+        "URL MAPA:\n" + url,
+        android.widget.Toast.LENGTH_LONG
+).show();
         try {
 
             /*
