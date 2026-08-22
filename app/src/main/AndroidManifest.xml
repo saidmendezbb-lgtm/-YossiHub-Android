@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- INTERNET -->
+    <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- NOTIFICACIONES -->
+    <!-- Notificaciones -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- UBICACIÓN -->
+    <!-- Ubicación GPS -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
@@ -15,25 +15,20 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="YossiHub"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.YossiHub"
-        android:usesCleartextTraffic="true">
+        android:supportsRtl="true">
 
-        <!-- PANTALLA PRINCIPAL -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
         </activity>
 
-        <!-- FIREBASE MESSAGING -->
+        <!-- Firebase: notificaciones push -->
         <service
             android:name=".YossiHubMessagingService"
             android:exported="false">
