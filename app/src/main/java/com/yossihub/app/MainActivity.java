@@ -74,110 +74,73 @@ public class MainActivity extends Activity {
 
         webView.setBackgroundColor(Color.rgb(255, 196, 0));
 
-        /*
-         * WEBVIEW
-         */
         WebSettings settings = webView.getSettings();
 
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-
-        /*
-         * IMPORTANTE:
-         * Permite navigator.geolocation dentro de YossiHub.
-         */
         settings.setGeolocationEnabled(true);
 
-        /*
-         * Puente Android ↔ YossiHub
-         */
         webView.addJavascriptInterface(
                 new YossiHubBridge(),
                 "YossiHub"
         );
 
-        /*
-         * =================================================
-         * GEOLOCALIZACIÓN DEL WEBVIEW
-         * =================================================
-         */
         webView.setWebChromeClient(
                 new WebChromeClient() {
 
-            @Override
-            public void onGeolocationPermissionsShowPrompt(
-                    String origin,
-                    GeolocationPermissions.Callback callback
-            ) {
+                    @Override
+                    public void onGeolocationPermissionsShowPrompt(
+                            String origin,
+                            GeolocationPermissions.Callback callback
+                    ) {
 
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                            callback.invoke(origin, true, false);
+                            return;
+                        }
 
-                    callback.invoke(
-                            origin,
-                            true,
-                            false
-                    );
+                        boolean fine =
+                                checkSelfPermission(
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED;
 
-                    return;
+                        boolean coarse =
+                                checkSelfPermission(
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED;
+
+                        if (fine || coarse) {
+
+                            callback.invoke(origin, true, false);
+
+                        } else {
+
+                            pendingGeoOrigin = origin;
+                            pendingGeoCallback = callback;
+
+                            requestPermissions(
+                                    new String[]{
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                    },
+                                    REQUEST_LOCATION
+                            );
+                        }
+                    }
+
+                    @Override
+                    public void onPermissionRequest(
+                            PermissionRequest request
+                    ) {
+                        super.onPermissionRequest(request);
+                    }
                 }
-
-                boolean fine =
-                        checkSelfPermission(
-                                Manifest.permission.ACCESS_FINE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED;
-
-                boolean coarse =
-                        checkSelfPermission(
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED;
-
-                if (fine || coarse) {
-
-                    callback.invoke(
-                            origin,
-                            true,
-                            false
-                    );
-
-                } else {
-
-                    /*
-                     * Guardamos la solicitud de la página
-                     * mientras Android pregunta el permiso.
-                     */
-                    pendingGeoOrigin = origin;
-                    pendingGeoCallback = callback;
-
-                    requestPermissions(
-                            new String[]{
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                            },
-                            REQUEST_LOCATION
-                    );
-                }
-            }
-
-            @Override
-            public void onPermissionRequest(
-                    PermissionRequest request
-            ) {
-
-                /*
-                 * No concedemos permisos web desconocidos
-                 * automáticamente.
-                 */
-                super.onPermissionRequest(request);
-            }
-        });
-
+        );
 
         /*
-         * =================================================
          * SPLASH
-         * =================================================
          */
         splashView = new FrameLayout(this);
 
@@ -228,62 +191,53 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
-
         /*
-         * =================================================
          * WEBVIEW CLIENT
-         * =================================================
          */
         webView.setWebViewClient(
                 new WebViewClient() {
 
-            @Override
-            public boolean shouldOverrideUrlLoading(
-                    WebView view,
-                    WebResourceRequest request
-            ) {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(
+                            WebView view,
+                            WebResourceRequest request
+                    ) {
 
-                if (request == null ||
-                        request.getUrl() == null) {
+                        if (request == null ||
+                                request.getUrl() == null) {
 
-                    return false;
+                            return false;
+                        }
+
+                        return handleExternalUrl(
+                                request.getUrl().toString()
+                        );
+                    }
+
+                    @Override
+                    public boolean shouldOverrideUrlLoading(
+                            WebView view,
+                            String url
+                    ) {
+
+                        return handleExternalUrl(url);
+                    }
+
+                    @Override
+                    public void onPageFinished(
+                            WebView view,
+                            String url
+                    ) {
+
+                        super.onPageFinished(view, url);
+
+                        pageLoaded = true;
+
+                        showWebsite();
+                    }
                 }
+        );
 
-                return handleExternalUrl(
-                        request.getUrl().toString()
-                );
-            }
-
-            @Override
-            public boolean shouldOverrideUrlLoading(
-                    WebView view,
-                    String url
-            ) {
-
-                return handleExternalUrl(url);
-            }
-
-            @Override
-            public void onPageFinished(
-                    WebView view,
-                    String url
-            ) {
-
-                super.onPageFinished(
-                        view,
-                        url
-                );
-
-                pageLoaded = true;
-
-                showWebsite();
-            }
-        });
-
-
-        /*
-         * Tiempo del splash
-         */
         handler.postDelayed(
                 () -> {
 
@@ -295,13 +249,8 @@ public class MainActivity extends Activity {
                 SPLASH_DURATION
         );
 
-
-        /*
-         * Abrir YossiHub
-         */
         webView.loadUrl(HOME_URL);
     }
-
 
     /*
      * =====================================================
@@ -310,16 +259,21 @@ public class MainActivity extends Activity {
      */
     private boolean handleExternalUrl(String url) {
 
-        if (url == null ||
-                url.trim().isEmpty()) {
-
+        if (url == null || url.trim().isEmpty()) {
             return false;
         }
 
         try {
 
             /*
+             * =================================================
              * INTENT://
+             *
+             * IMPORTANTE PARA GOOGLE MAPS:
+             * Si el enlace intent contiene una URL HTTPS de
+             * Google Maps, recuperamos esa URL COMPLETA para
+             * conservar origin, destination y waypoints.
+             * =================================================
              */
             if (url.startsWith("intent://")) {
 
@@ -329,6 +283,65 @@ public class MainActivity extends Activity {
                                 Intent.URI_INTENT_SCHEME
                         );
 
+                Uri parsedData = parsedIntent.getData();
+
+                if (parsedData != null) {
+
+                    String parsedUrl =
+                            parsedData.toString();
+
+                    if (isGoogleMapsUrl(parsedUrl)) {
+
+                        openGoogleMaps(parsedUrl);
+
+                        return true;
+                    }
+                }
+
+                String fallback =
+                        parsedIntent.getStringExtra(
+                                "browser_fallback_url"
+                        );
+
+                if (fallback != null &&
+                        !fallback.trim().isEmpty() &&
+                        isGoogleMapsUrl(fallback)) {
+
+                    openGoogleMaps(fallback);
+
+                    return true;
+                }
+
+                /*
+                 * Reconstruimos el HTTPS conservando TODO lo que
+                 * está antes de #Intent;.
+                 */
+                String rawPart = url;
+
+                int marker =
+                        rawPart.indexOf("#Intent;");
+
+                if (marker >= 0) {
+                    rawPart =
+                            rawPart.substring(0, marker);
+                }
+
+                String httpsUrl =
+                        rawPart.replaceFirst(
+                                "^intent://",
+                                "https://"
+                        );
+
+                if (isGoogleMapsUrl(httpsUrl)) {
+
+                    openGoogleMaps(httpsUrl);
+
+                    return true;
+                }
+
+                /*
+                 * Otros intent:// como WhatsApp u otras apps.
+                 */
                 try {
 
                     startActivity(parsedIntent);
@@ -337,157 +350,62 @@ public class MainActivity extends Activity {
 
                 } catch (ActivityNotFoundException e) {
 
-                    String fallback =
-                            parsedIntent.getStringExtra(
-                                    "browser_fallback_url"
-                            );
-
                     if (fallback != null &&
                             !fallback.trim().isEmpty()) {
 
-                        Intent browserIntent =
+                        startActivity(
                                 new Intent(
                                         Intent.ACTION_VIEW,
                                         Uri.parse(fallback)
-                                );
-
-                        startActivity(browserIntent);
+                                )
+                        );
 
                         return true;
                     }
 
-                    String httpsUrl =
-                            url.replaceFirst(
-                                    "^intent://",
-                                    "https://"
-                            );
-
-                    int marker =
-                            httpsUrl.indexOf(
-                                    "#Intent;"
-                            );
-
-                    if (marker >= 0) {
-
-                        httpsUrl =
-                                httpsUrl.substring(
-                                        0,
-                                        marker
-                                );
-                    }
-
-                    Intent browserIntent =
+                    startActivity(
                             new Intent(
                                     Intent.ACTION_VIEW,
                                     Uri.parse(httpsUrl)
-                            );
-
-                    startActivity(browserIntent);
+                            )
+                    );
 
                     return true;
                 }
             }
 
-
             /*
              * GOOGLE NAVIGATION
              */
-            if (url.startsWith(
-                    "google.navigation:"
-            )) {
+            if (url.startsWith("google.navigation:")) {
 
-                Intent mapsIntent =
-                        new Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(url)
-                        );
-
-                mapsIntent.setPackage(
-                        "com.google.android.apps.maps"
-                );
-
-                try {
-
-                    startActivity(mapsIntent);
-
-                } catch (ActivityNotFoundException e) {
-
-                    mapsIntent.setPackage(null);
-
-                    startActivity(mapsIntent);
-                }
+                openGoogleMaps(url);
 
                 return true;
             }
-
 
             /*
              * GEO
              */
             if (url.startsWith("geo:")) {
 
-                Intent mapsIntent =
-                        new Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(url)
-                        );
-
-                mapsIntent.setPackage(
-                        "com.google.android.apps.maps"
-                );
-
-                try {
-
-                    startActivity(mapsIntent);
-
-                } catch (ActivityNotFoundException e) {
-
-                    mapsIntent.setPackage(null);
-
-                    startActivity(mapsIntent);
-                }
+                openGoogleMaps(url);
 
                 return true;
             }
-
 
             /*
              * GOOGLE MAPS HTTPS
+             *
+             * Se manda EXACTAMENTE la URL recibida.
+             * No cambiamos origin, destination ni waypoints.
              */
-            if (
-                    url.startsWith(
-                            "https://www.google.com/maps"
-                    )
-                    ||
-                    url.startsWith(
-                            "https://maps.google.com"
-                    )
-            ) {
+            if (isGoogleMapsUrl(url)) {
 
-                Intent mapsIntent =
-                        new Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(url)
-                        );
-
-                mapsIntent.setPackage(
-                        "com.google.android.apps.maps"
-                );
-
-                try {
-
-                    startActivity(mapsIntent);
-
-                } catch (ActivityNotFoundException e) {
-
-                    mapsIntent.setPackage(null);
-
-                    startActivity(mapsIntent);
-                }
+                openGoogleMaps(url);
 
                 return true;
             }
-
 
             /*
              * WHATSAPP
@@ -495,21 +413,13 @@ public class MainActivity extends Activity {
             if (
                     url.startsWith("whatsapp:")
                     ||
-                    url.startsWith(
-                            "https://wa.me/"
-                    )
+                    url.startsWith("https://wa.me/")
                     ||
-                    url.startsWith(
-                            "http://wa.me/"
-                    )
+                    url.startsWith("http://wa.me/")
                     ||
-                    url.startsWith(
-                            "https://api.whatsapp.com/"
-                    )
+                    url.startsWith("https://api.whatsapp.com/")
                     ||
-                    url.startsWith(
-                            "http://api.whatsapp.com/"
-                    )
+                    url.startsWith("http://api.whatsapp.com/")
             ) {
 
                 try {
@@ -567,7 +477,6 @@ public class MainActivity extends Activity {
                 }
             }
 
-
             /*
              * TELÉFONO / CORREO / PLAY STORE
              */
@@ -597,9 +506,73 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /*
+         * Los enlaces normales de YossiHub continúan
+         * dentro del WebView.
+         */
         return false;
     }
 
+    /*
+     * =====================================================
+     * DETECTAR GOOGLE MAPS
+     * =====================================================
+     */
+    private boolean isGoogleMapsUrl(String url) {
+
+        if (url == null) {
+            return false;
+        }
+
+        return url.startsWith(
+                "https://www.google.com/maps"
+        )
+                ||
+                url.startsWith(
+                        "https://maps.google.com"
+                )
+                ||
+                url.startsWith(
+                        "http://www.google.com/maps"
+                )
+                ||
+                url.startsWith(
+                        "http://maps.google.com"
+                );
+    }
+
+    /*
+     * =====================================================
+     * ABRIR GOOGLE MAPS
+     *
+     * NO reconstruimos la ruta aquí.
+     * Android recibe exactamente la misma URL que genera
+     * YossiHub.
+     * =====================================================
+     */
+    private void openGoogleMaps(String url) {
+
+        Intent mapsIntent =
+                new Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse(url)
+                );
+
+        mapsIntent.setPackage(
+                "com.google.android.apps.maps"
+        );
+
+        try {
+
+            startActivity(mapsIntent);
+
+        } catch (ActivityNotFoundException e) {
+
+            mapsIntent.setPackage(null);
+
+            startActivity(mapsIntent);
+        }
+    }
 
     /*
      * =====================================================
@@ -614,27 +587,27 @@ public class MainActivity extends Activity {
                 .addOnCompleteListener(
                         task -> {
 
-            if (!task.isSuccessful() ||
-                    task.getResult() == null) {
+                            if (!task.isSuccessful() ||
+                                    task.getResult() == null) {
 
-                return;
-            }
+                                return;
+                            }
 
-            fcmToken = task.getResult();
+                            fcmToken = task.getResult();
 
-            if (webView != null) {
+                            if (webView != null) {
 
-                webView.post(
-                        () ->
-                                webView.evaluateJavascript(
-                                        "window.dispatchEvent(new Event('yossihub-fcm-ready'));",
-                                        null
-                                )
+                                webView.post(
+                                        () ->
+                                                webView.evaluateJavascript(
+                                                        "window.dispatchEvent(new Event('yossihub-fcm-ready'));",
+                                                        null
+                                                )
+                                );
+                            }
+                        }
                 );
-            }
-        });
     }
-
 
     /*
      * =====================================================
@@ -657,7 +630,6 @@ public class MainActivity extends Activity {
             return true;
         }
     }
-
 
     /*
      * =====================================================
@@ -688,7 +660,6 @@ public class MainActivity extends Activity {
             }
         }
     }
-
 
     /*
      * =====================================================
@@ -729,7 +700,6 @@ public class MainActivity extends Activity {
         }
     }
 
-
     /*
      * =====================================================
      * RESULTADO DE LOS PERMISOS
@@ -748,10 +718,7 @@ public class MainActivity extends Activity {
                 grantResults
         );
 
-        if (
-                requestCode ==
-                REQUEST_LOCATION
-        ) {
+        if (requestCode == REQUEST_LOCATION) {
 
             boolean granted = false;
 
@@ -787,7 +754,6 @@ public class MainActivity extends Activity {
         }
     }
 
-
     /*
      * =====================================================
      * SPLASH
@@ -795,11 +761,7 @@ public class MainActivity extends Activity {
      */
     private void showWebsite() {
 
-        if (
-                !pageLoaded ||
-                !splashTimeElapsed
-        ) {
-
+        if (!pageLoaded || !splashTimeElapsed) {
             return;
         }
 
@@ -811,7 +773,6 @@ public class MainActivity extends Activity {
                 View.GONE
         );
     }
-
 
     /*
      * =====================================================
@@ -833,7 +794,6 @@ public class MainActivity extends Activity {
             super.onBackPressed();
         }
     }
-
 
     /*
      * =====================================================
