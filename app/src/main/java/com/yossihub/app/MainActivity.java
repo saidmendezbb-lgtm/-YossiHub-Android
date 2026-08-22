@@ -122,4 +122,75 @@ public class MainActivity extends Activity {
                         return;
                     }
 
-                    fcm
+                    fcmToken = task.getResult();
+
+                    if (webView != null) {
+                        webView.post(() -> webView.evaluateJavascript(
+                                "window.dispatchEvent(new Event('yossihub-fcm-ready'));",
+                                null
+                        ));
+                    }
+                });
+    }
+
+    private class YossiHubBridge {
+
+        @JavascriptInterface
+        public String getFcmToken() {
+            return fcmToken == null ? "" : fcmToken;
+        }
+
+        @JavascriptInterface
+        public boolean isNativeApp() {
+            return true;
+        }
+    }
+
+    private void requestNotificationPermission() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                requestPermissions(
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        1001
+                );
+            }
+        }
+    }
+
+    private void showWebsite() {
+
+        if (!pageLoaded || !splashTimeElapsed) {
+            return;
+        }
+
+        webView.setBackgroundColor(Color.WHITE);
+        splashView.setVisibility(View.GONE);
+    }
+
+    @Override
+    public void onBackPressed() {
+
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+
+        handler.removeCallbacksAndMessages(null);
+
+        if (webView != null) {
+            webView.destroy();
+            webView = null;
+        }
+
+        super.onDestroy();
+    }
+}
