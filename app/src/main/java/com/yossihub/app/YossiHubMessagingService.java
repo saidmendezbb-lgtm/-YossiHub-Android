@@ -49,7 +49,7 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
         }
 
         createNotificationChannel();
-        showNotification(title, body);
+        showNotification(title, body, remoteMessage.getData());
     }
 
     @Override
@@ -59,10 +59,13 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
         Log.d(TAG, "Nuevo token FCM: " + token);
     }
 
-    private void showNotification(String title, String body) {
+    private void showNotification(String title, String body, java.util.Map<String, String> data) {
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        for (java.util.Map.Entry<String, String> entry : data.entrySet()) {
+    intent.putExtra(entry.getKey(), entry.getValue());
+        }
 
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this,
