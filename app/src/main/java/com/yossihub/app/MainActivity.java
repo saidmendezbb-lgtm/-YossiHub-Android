@@ -13,7 +13,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.Window;
+import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -28,12 +31,19 @@ public class MainActivity extends Activity {
     private static final String HOME_URL = "https://yossihub.com/";
     private static final long SPLASH_DURATION = 4000;
 
+    private static final int REQUEST_NOTIFICATIONS = 1001;
+    private static final int REQUEST_LOCATION = 1002;
+
     private WebView webView;
     private FrameLayout splashView;
 
     private boolean pageLoaded = false;
     private boolean splashTimeElapsed = false;
+
     private volatile String fcmToken = "";
+
+    private GeolocationPermissions.Callback pendingGeoCallback;
+    private String pendingGeoOrigin;
 
     private final Handler handler =
             new Handler(Looper.getMainLooper());
@@ -43,6 +53,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         requestNotificationPermission();
+        requestLocationPermission();
         refreshFcmToken();
 
         Window window = getWindow();
@@ -61,12 +72,12 @@ public class MainActivity extends Activity {
                 )
         );
 
-        webView.setBackgroundColor(
-                Color.rgb(255, 196, 0)
-        );
+        webView.setBackgroundColor(Color.rgb(255, 196, 0));
 
-        WebSettings settings =
-                webView.getSettings();
+        /*
+         * WEBVIEW
+         */
+        WebSettings settings = webView.getSettings();
 
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -74,7 +85,13 @@ public class MainActivity extends Activity {
         settings.setUseWideViewPort(true);
 
         /*
-         * Comunicación página ↔ APK
+         * IMPORTANTE:
+         * Permite navigator.geolocation dentro de YossiHub.
+         */
+        settings.setGeolocationEnabled(true);
+
+        /*
+         * Puente Android ↔ YossiHub
          */
         webView.addJavascriptInterface(
                 new YossiHubBridge(),
@@ -82,7 +99,85 @@ public class MainActivity extends Activity {
         );
 
         /*
+         * =================================================
+         * GEOLOCALIZACIÓN DEL WEBVIEW
+         * =================================================
+         */
+        webView.setWebChromeClient(
+                new WebChromeClient() {
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(
+                    String origin,
+                    GeolocationPermissions.Callback callback
+            ) {
+
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+
+                    callback.invoke(
+                            origin,
+                            true,
+                            false
+                    );
+
+                    return;
+                }
+
+                boolean fine =
+                        checkSelfPermission(
+                                Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED;
+
+                boolean coarse =
+                        checkSelfPermission(
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED;
+
+                if (fine || coarse) {
+
+                    callback.invoke(
+                            origin,
+                            true,
+                            false
+                    );
+
+                } else {
+
+                    /*
+                     * Guardamos la solicitud de la página
+                     * mientras Android pregunta el permiso.
+                     */
+                    pendingGeoOrigin = origin;
+                    pendingGeoCallback = callback;
+
+                    requestPermissions(
+                            new String[]{
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                            },
+                            REQUEST_LOCATION
+                    );
+                }
+            }
+
+            @Override
+            public void onPermissionRequest(
+                    PermissionRequest request
+            ) {
+
+                /*
+                 * No concedemos permisos web desconocidos
+                 * automáticamente.
+                 */
+                super.onPermissionRequest(request);
+            }
+        });
+
+
+        /*
+         * =================================================
          * SPLASH
+         * =================================================
          */
         splashView = new FrameLayout(this);
 
@@ -133,15 +228,15 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
+
         /*
+         * =================================================
          * WEBVIEW CLIENT
+         * =================================================
          */
         webView.setWebViewClient(
                 new WebViewClient() {
 
-            /*
-             * Android moderno
-             */
             @Override
             public boolean shouldOverrideUrlLoading(
                     WebView view,
@@ -159,9 +254,6 @@ public class MainActivity extends Activity {
                 );
             }
 
-            /*
-             * Android anteriores
-             */
             @Override
             public boolean shouldOverrideUrlLoading(
                     WebView view,
@@ -188,8 +280,9 @@ public class MainActivity extends Activity {
             }
         });
 
+
         /*
-         * Tiempo mínimo del splash
+         * Tiempo del splash
          */
         handler.postDelayed(
                 () -> {
@@ -202,8 +295,9 @@ public class MainActivity extends Activity {
                 SPLASH_DURATION
         );
 
+
         /*
-         * Abrir YOSSI HUB
+         * Abrir YossiHub
          */
         webView.loadUrl(HOME_URL);
     }
@@ -213,16 +307,8 @@ public class MainActivity extends Activity {
      * =====================================================
      * ENLACES EXTERNOS
      * =====================================================
-     *
-     * Maps, WhatsApp, teléfono, etc.
-     * NO se cargan dentro de YOSSI HUB.
-     *
-     * Así, al regresar desde otra aplicación,
-     * YOSSI HUB permanece exactamente donde estaba.
      */
-    private boolean handleExternalUrl(
-            String url
-    ) {
+    private boolean handleExternalUrl(String url) {
 
         if (url == null ||
                 url.trim().isEmpty()) {
@@ -233,9 +319,7 @@ public class MainActivity extends Activity {
         try {
 
             /*
-             * =============================================
              * INTENT://
-             * =============================================
              */
             if (url.startsWith("intent://")) {
 
@@ -251,20 +335,15 @@ public class MainActivity extends Activity {
 
                     return true;
 
-                } catch (
-                        ActivityNotFoundException e
-                ) {
+                } catch (ActivityNotFoundException e) {
 
                     String fallback =
-                            parsedIntent
-                                    .getStringExtra(
-                                            "browser_fallback_url"
-                                    );
+                            parsedIntent.getStringExtra(
+                                    "browser_fallback_url"
+                            );
 
                     if (fallback != null &&
-                            !fallback
-                                    .trim()
-                                    .isEmpty()) {
+                            !fallback.trim().isEmpty()) {
 
                         Intent browserIntent =
                                 new Intent(
@@ -272,9 +351,7 @@ public class MainActivity extends Activity {
                                         Uri.parse(fallback)
                                 );
 
-                        startActivity(
-                                browserIntent
-                        );
+                        startActivity(browserIntent);
 
                         return true;
                     }
@@ -305,9 +382,7 @@ public class MainActivity extends Activity {
                                     Uri.parse(httpsUrl)
                             );
 
-                    startActivity(
-                            browserIntent
-                    );
+                    startActivity(browserIntent);
 
                     return true;
                 }
@@ -315,9 +390,7 @@ public class MainActivity extends Activity {
 
 
             /*
-             * =============================================
              * GOOGLE NAVIGATION
-             * =============================================
              */
             if (url.startsWith(
                     "google.navigation:"
@@ -335,19 +408,13 @@ public class MainActivity extends Activity {
 
                 try {
 
-                    startActivity(
-                            mapsIntent
-                    );
+                    startActivity(mapsIntent);
 
-                } catch (
-                        ActivityNotFoundException e
-                ) {
+                } catch (ActivityNotFoundException e) {
 
                     mapsIntent.setPackage(null);
 
-                    startActivity(
-                            mapsIntent
-                    );
+                    startActivity(mapsIntent);
                 }
 
                 return true;
@@ -355,9 +422,7 @@ public class MainActivity extends Activity {
 
 
             /*
-             * =============================================
              * GEO
-             * =============================================
              */
             if (url.startsWith("geo:")) {
 
@@ -373,19 +438,13 @@ public class MainActivity extends Activity {
 
                 try {
 
-                    startActivity(
-                            mapsIntent
-                    );
+                    startActivity(mapsIntent);
 
-                } catch (
-                        ActivityNotFoundException e
-                ) {
+                } catch (ActivityNotFoundException e) {
 
                     mapsIntent.setPackage(null);
 
-                    startActivity(
-                            mapsIntent
-                    );
+                    startActivity(mapsIntent);
                 }
 
                 return true;
@@ -393,9 +452,7 @@ public class MainActivity extends Activity {
 
 
             /*
-             * =============================================
              * GOOGLE MAPS HTTPS
-             * =============================================
              */
             if (
                     url.startsWith(
@@ -419,19 +476,13 @@ public class MainActivity extends Activity {
 
                 try {
 
-                    startActivity(
-                            mapsIntent
-                    );
+                    startActivity(mapsIntent);
 
-                } catch (
-                        ActivityNotFoundException e
-                ) {
+                } catch (ActivityNotFoundException e) {
 
                     mapsIntent.setPackage(null);
 
-                    startActivity(
-                            mapsIntent
-                    );
+                    startActivity(mapsIntent);
                 }
 
                 return true;
@@ -439,23 +490,10 @@ public class MainActivity extends Activity {
 
 
             /*
-             * =============================================
              * WHATSAPP
-             * =============================================
-             *
-             * IMPORTANTE:
-             *
-             * wa.me y api.whatsapp.com también
-             * se interceptan aquí.
-             *
-             * De esta manera la página de WhatsApp
-             * NO reemplaza la pantalla del viaje
-             * dentro de YOSSI HUB.
              */
             if (
-                    url.startsWith(
-                            "whatsapp:"
-                    )
+                    url.startsWith("whatsapp:")
                     ||
                     url.startsWith(
                             "https://wa.me/"
@@ -474,9 +512,6 @@ public class MainActivity extends Activity {
                     )
             ) {
 
-                /*
-                 * WhatsApp normal
-                 */
                 try {
 
                     Intent whatsappIntent =
@@ -497,9 +532,6 @@ public class MainActivity extends Activity {
 
                 } catch (Exception e) {
 
-                    /*
-                     * WhatsApp Business
-                     */
                     try {
 
                         Intent businessIntent =
@@ -518,14 +550,8 @@ public class MainActivity extends Activity {
 
                         return true;
 
-                    } catch (
-                            Exception ignored
-                    ) {
+                    } catch (Exception ignored) {
 
-                        /*
-                         * Si WhatsApp no está instalado,
-                         * abrir navegador EXTERNO.
-                         */
                         Intent browserIntent =
                                 new Intent(
                                         Intent.ACTION_VIEW,
@@ -543,11 +569,7 @@ public class MainActivity extends Activity {
 
 
             /*
-             * =============================================
-             * TELÉFONO
-             * CORREO
-             * PLAY STORE
-             * =============================================
+             * TELÉFONO / CORREO / PLAY STORE
              */
             if (
                     url.startsWith("tel:")
@@ -572,25 +594,16 @@ public class MainActivity extends Activity {
 
         } catch (Exception e) {
 
-            /*
-             * Evitar que un enlace externo defectuoso
-             * bloquee la WebView.
-             */
             return true;
         }
 
-
-        /*
-         * Los enlaces normales siguen
-         * navegando dentro de YOSSI HUB.
-         */
         return false;
     }
 
 
     /*
      * =====================================================
-     * FIREBASE TOKEN
+     * FIREBASE
      * =====================================================
      */
     private void refreshFcmToken() {
@@ -607,8 +620,7 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            fcmToken =
-                    task.getResult();
+            fcmToken = task.getResult();
 
             if (webView != null) {
 
@@ -626,7 +638,7 @@ public class MainActivity extends Activity {
 
     /*
      * =====================================================
-     * PUENTE JAVASCRIPT
+     * PUENTE ANDROID
      * =====================================================
      */
     private class YossiHubBridge {
@@ -649,33 +661,29 @@ public class MainActivity extends Activity {
 
     /*
      * =====================================================
-     * PERMISO DE NOTIFICACIONES
+     * PERMISO NOTIFICACIONES
      * =====================================================
      */
     private void requestNotificationPermission() {
 
         if (
                 Build.VERSION.SDK_INT
-                        >=
-                Build.VERSION_CODES.TIRAMISU
+                        >= Build.VERSION_CODES.TIRAMISU
         ) {
 
             if (
                     checkSelfPermission(
-                            Manifest.permission
-                                    .POST_NOTIFICATIONS
+                            Manifest.permission.POST_NOTIFICATIONS
                     )
                             !=
-                    PackageManager
-                            .PERMISSION_GRANTED
+                    PackageManager.PERMISSION_GRANTED
             ) {
 
                 requestPermissions(
                         new String[]{
-                                Manifest.permission
-                                        .POST_NOTIFICATIONS
+                                Manifest.permission.POST_NOTIFICATIONS
                         },
-                        1001
+                        REQUEST_NOTIFICATIONS
                 );
             }
         }
@@ -684,7 +692,105 @@ public class MainActivity extends Activity {
 
     /*
      * =====================================================
-     * QUITAR SPLASH
+     * PERMISO GPS
+     * =====================================================
+     */
+    private void requestLocationPermission() {
+
+        if (
+                Build.VERSION.SDK_INT
+                        >= Build.VERSION_CODES.M
+        ) {
+
+            boolean fine =
+                    checkSelfPermission(
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                    )
+                            ==
+                    PackageManager.PERMISSION_GRANTED;
+
+            boolean coarse =
+                    checkSelfPermission(
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                            ==
+                    PackageManager.PERMISSION_GRANTED;
+
+            if (!fine && !coarse) {
+
+                requestPermissions(
+                        new String[]{
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                        },
+                        REQUEST_LOCATION
+                );
+            }
+        }
+    }
+
+
+    /*
+     * =====================================================
+     * RESULTADO DE LOS PERMISOS
+     * =====================================================
+     */
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults
+    ) {
+
+        super.onRequestPermissionsResult(
+                requestCode,
+                permissions,
+                grantResults
+        );
+
+        if (
+                requestCode ==
+                REQUEST_LOCATION
+        ) {
+
+            boolean granted = false;
+
+            if (grantResults != null) {
+
+                for (int result : grantResults) {
+
+                    if (
+                            result ==
+                            PackageManager.PERMISSION_GRANTED
+                    ) {
+
+                        granted = true;
+                        break;
+                    }
+                }
+            }
+
+            if (
+                    pendingGeoCallback != null &&
+                    pendingGeoOrigin != null
+            ) {
+
+                pendingGeoCallback.invoke(
+                        pendingGeoOrigin,
+                        granted,
+                        false
+                );
+
+                pendingGeoCallback = null;
+                pendingGeoOrigin = null;
+            }
+        }
+    }
+
+
+    /*
+     * =====================================================
+     * SPLASH
      * =====================================================
      */
     private void showWebsite() {
@@ -709,7 +815,7 @@ public class MainActivity extends Activity {
 
     /*
      * =====================================================
-     * BOTÓN ATRÁS
+     * ATRÁS
      * =====================================================
      */
     @Override
@@ -744,7 +850,6 @@ public class MainActivity extends Activity {
         if (webView != null) {
 
             webView.destroy();
-
             webView = null;
         }
 
