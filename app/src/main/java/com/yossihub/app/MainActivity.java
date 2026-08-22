@@ -263,23 +263,7 @@ public class MainActivity extends Activity {
             return false;
         }
 
-        android.content.ClipboardManager clipboard =
-        (android.content.ClipboardManager)
-                getSystemService(CLIPBOARD_SERVICE);
-
-android.content.ClipData clip =
-        android.content.ClipData.newPlainText(
-                "URL MAPA",
-                url
-        );
-
-clipboard.setPrimaryClip(clip);
-
-android.widget.Toast.makeText(
-        MainActivity.this,
-        "URL del mapa copiada",
-        android.widget.Toast.LENGTH_SHORT
-).show();
+        
         try {
 
             /*
@@ -294,101 +278,76 @@ android.widget.Toast.makeText(
              */
             if (url.startsWith("intent://")) {
 
-                Intent parsedIntent =
-                        Intent.parseUri(
-                                url,
-                                Intent.URI_INTENT_SCHEME
-                        );
+    try {
 
-                Uri parsedData = parsedIntent.getData();
+        Intent parsedIntent = Intent.parseUri(
+                url,
+                Intent.URI_INTENT_SCHEME
+        );
 
-                if (parsedData != null) {
+        String fallback = parsedIntent.getStringExtra(
+                "browser_fallback_url"
+        );
 
-                    String parsedUrl =
-                            parsedData.toString();
+        /*
+         * Si el intent trae la URL HTTPS completa de Google Maps,
+         * usamos esa URL para conservar:
+         * origen + paradas + destino.
+         */
+        if (fallback != null &&
+                !fallback.trim().isEmpty() &&
+                isGoogleMapsUrl(fallback)) {
 
-                    if (isGoogleMapsUrl(parsedUrl)) {
+            openGoogleMaps(fallback);
+            return true;
+        }
 
-                        openGoogleMaps(parsedUrl);
+        /*
+         * Si el propio intent contiene una URL de Google Maps,
+         * intentamos abrirlo directamente.
+         */
+        Uri data = parsedIntent.getData();
 
-                        return true;
-                    }
-                }
+        if (data != null) {
 
-                String fallback =
-                        parsedIntent.getStringExtra(
-                                "browser_fallback_url"
-                        );
+            String mapUrl = data.toString();
 
-                if (fallback != null &&
-                        !fallback.trim().isEmpty() &&
-                        isGoogleMapsUrl(fallback)) {
+            if (isGoogleMapsUrl(mapUrl)) {
+                openGoogleMaps(mapUrl);
+                return true;
+            }
+        }
 
-                    openGoogleMaps(fallback);
+        /*
+         * Para otros intent:// que no sean Maps.
+         */
+        try {
 
-                    return true;
-                }
+            startActivity(parsedIntent);
+            return true;
 
-                /*
-                 * Reconstruimos el HTTPS conservando TODO lo que
-                 * está antes de #Intent;.
-                 */
-                String rawPart = url;
+        } catch (ActivityNotFoundException e) {
 
-                int marker =
-                        rawPart.indexOf("#Intent;");
+            if (fallback != null &&
+                    !fallback.trim().isEmpty()) {
 
-                if (marker >= 0) {
-                    rawPart =
-                            rawPart.substring(0, marker);
-                }
+                startActivity(
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(fallback)
+                        )
+                );
 
-                String httpsUrl =
-                        rawPart.replaceFirst(
-                                "^intent://",
-                                "https://"
-                        );
+                return true;
+            }
+        }
 
-                if (isGoogleMapsUrl(httpsUrl)) {
+    } catch (Exception e) {
 
-                    openGoogleMaps(httpsUrl);
+        return true;
+    }
 
-                    return true;
-                }
-
-                /*
-                 * Otros intent:// como WhatsApp u otras apps.
-                 */
-                try {
-
-                    startActivity(parsedIntent);
-
-                    return true;
-
-                } catch (ActivityNotFoundException e) {
-
-                    if (fallback != null &&
-                            !fallback.trim().isEmpty()) {
-
-                        startActivity(
-                                new Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse(fallback)
-                                )
-                        );
-
-                        return true;
-                    }
-
-                    startActivity(
-                            new Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse(httpsUrl)
-                            )
-                    );
-
-                    return true;
-                }
+    return true;
             }
 
             /*
