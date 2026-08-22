@@ -21,6 +21,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
@@ -33,7 +34,9 @@ public class MainActivity extends Activity {
 
     private static final int REQUEST_NOTIFICATIONS = 1001;
     private static final int REQUEST_LOCATION = 1002;
+    private static final int REQUEST_FILE_CHOOSER = 1003;
 
+private ValueCallback<Uri[]> filePathCallback;
     private WebView webView;
     private FrameLayout splashView;
 
@@ -103,7 +106,39 @@ if (notificationIntent != null) {
 
         webView.setWebChromeClient(
                 new WebChromeClient() {
+         @Override
+public boolean onShowFileChooser(
+        WebView webView,
+        ValueCallback<Uri[]> filePathCallback,
+        FileChooserParams fileChooserParams
+) {
 
+    if (MainActivity.this.filePathCallback != null) {
+        MainActivity.this.filePathCallback.onReceiveValue(null);
+    }
+
+    MainActivity.this.filePathCallback = filePathCallback;
+
+    Intent intent;
+
+    try {
+        intent = fileChooserParams.createIntent();
+    } catch (Exception e) {
+        intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+    }
+
+    try {
+        startActivityForResult(intent, REQUEST_FILE_CHOOSER);
+    } catch (ActivityNotFoundException e) {
+        MainActivity.this.filePathCallback = null;
+        return false;
+    }
+
+    return true;
+}
+                    
                     @Override
                     public void onGeolocationPermissionsShowPrompt(
                             String origin,
@@ -788,7 +823,48 @@ if (notificationIntent != null) {
             super.onBackPressed();
         }
     }
+    @Override
+protected void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent data
+) {
 
+    super.onActivityResult(requestCode, resultCode, data);
+
+    if (requestCode == REQUEST_FILE_CHOOSER) {
+
+        if (filePathCallback == null) {
+            return;
+        }
+
+        Uri[] results = null;
+
+        if (resultCode == Activity.RESULT_OK && data != null) {
+
+            if (data.getClipData() != null) {
+
+                int count = data.getClipData().getItemCount();
+                results = new Uri[count];
+
+                for (int i = 0; i < count; i++) {
+                    results[i] = data.getClipData()
+                            .getItemAt(i)
+                            .getUri();
+                }
+
+            } else if (data.getData() != null) {
+
+                results = new Uri[]{
+                        data.getData()
+                };
+            }
+        }
+
+        filePathCallback.onReceiveValue(results);
+        filePathCallback = null;
+    }
+}
     /*
      * =====================================================
      * CERRAR
