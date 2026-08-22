@@ -3,6 +3,8 @@ package com.yossihub.app;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.net.Uri;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -62,7 +64,7 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
-        // Puente entre Android y YossiHub
+        // Comunicación entre la página y la APK
         webView.addJavascriptInterface(new YossiHubBridge(), "YossiHub");
 
         splashView = new FrameLayout(this);
@@ -94,8 +96,98 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         webView.setWebViewClient(new WebViewClient() {
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+
+                if (url == null) {
+                    return false;
+                }
+
+                try {
+
+                    // Abrir enlaces intent:// fuera de YOSSI HUB
+                    if (url.startsWith("intent://")) {
+
+                        Intent intent = Intent.parseUri(
+                                url,
+                                Intent.URI_INTENT_SCHEME
+                        );
+
+                        try {
+                            startActivity(intent);
+
+                        } catch (Exception e) {
+
+                            String fallback =
+                                    intent.getStringExtra("browser_fallback_url");
+
+                            if (fallback != null && !fallback.isEmpty()) {
+
+                                startActivity(
+                                        new Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse(fallback)
+                                        )
+                                );
+
+                            } else {
+
+                                String httpsUrl =
+                                        url.replaceFirst(
+                                                "^intent://",
+                                                "https://"
+                                        );
+
+                                int marker =
+                                        httpsUrl.indexOf("#Intent;");
+
+                                if (marker >= 0) {
+                                    httpsUrl =
+                                            httpsUrl.substring(0, marker);
+                                }
+
+                                startActivity(
+                                        new Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse(httpsUrl)
+                                        )
+                                );
+                            }
+                        }
+
+                        return true;
+                    }
+
+                    // Abrir Google Maps y otras aplicaciones externas
+                    if (url.startsWith("google.navigation:")
+                            || url.startsWith("geo:")
+                            || url.startsWith("market:")
+                            || url.startsWith("whatsapp:")
+                            || url.startsWith("tel:")
+                            || url.startsWith("mailto:")) {
+
+                        Intent externalIntent =
+                                new Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(url)
+                                );
+
+                        startActivity(externalIntent);
+
+                        return true;
+                    }
+
+                } catch (Exception ignored) {
+                    return true;
+                }
+
+                return false;
+            }
+
             @Override
             public void onPageFinished(WebView webView, String url) {
+
                 super.onPageFinished(webView, url);
 
                 pageLoaded = true;
@@ -104,31 +196,40 @@ public class MainActivity extends Activity {
         });
 
         handler.postDelayed(new Runnable() {
+
             @Override
             public void run() {
+
                 splashTimeElapsed = true;
                 showWebsite();
             }
+
         }, SPLASH_DURATION);
 
         webView.loadUrl(HOME_URL);
     }
 
     private void refreshFcmToken() {
-        FirebaseMessaging.getInstance().getToken()
+
+        FirebaseMessaging.getInstance()
+                .getToken()
                 .addOnCompleteListener(task -> {
 
-                    if (!task.isSuccessful() || task.getResult() == null) {
+                    if (!task.isSuccessful()
+                            || task.getResult() == null) {
                         return;
                     }
 
                     fcmToken = task.getResult();
 
                     if (webView != null) {
-                        webView.post(() -> webView.evaluateJavascript(
-                                "window.dispatchEvent(new Event('yossihub-fcm-ready'));",
-                                null
-                        ));
+
+                        webView.post(() ->
+                                webView.evaluateJavascript(
+                                        "window.dispatchEvent(new Event('yossihub-fcm-ready'));",
+                                        null
+                                )
+                        );
                     }
                 });
     }
@@ -148,13 +249,17 @@ public class MainActivity extends Activity {
 
     private void requestNotificationPermission() {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT
+                >= Build.VERSION_CODES.TIRAMISU) {
 
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
+            if (checkSelfPermission(
+                    Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED) {
 
                 requestPermissions(
-                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        new String[]{
+                                Manifest.permission.POST_NOTIFICATIONS
+                        },
                         1001
                 );
             }
@@ -176,6 +281,7 @@ public class MainActivity extends Activity {
 
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
+
         } else {
             super.onBackPressed();
         }
