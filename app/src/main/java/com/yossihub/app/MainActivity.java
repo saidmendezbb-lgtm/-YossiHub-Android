@@ -10,11 +10,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.Window;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+
+import com.google.firebase.messaging.FirebaseMessaging;
 
 public class MainActivity extends Activity {
 
@@ -26,6 +29,7 @@ public class MainActivity extends Activity {
 
     private boolean pageLoaded = false;
     private boolean splashTimeElapsed = false;
+    private volatile String fcmToken = "";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -33,19 +37,16 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Solicitar permiso de notificaciones en Android 13+
         requestNotificationPermission();
+        refreshFcmToken();
 
-        // BARRA SUPERIOR OSCURA + ICONOS BLANCOS
         Window window = getWindow();
         window.setStatusBarColor(Color.rgb(20, 24, 28));
         window.getDecorView().setSystemUiVisibility(0);
 
-        // CONTENEDOR PRINCIPAL
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(255, 196, 0));
 
-        // WEBVIEW
         webView = new WebView(this);
 
         webView.setLayoutParams(new FrameLayout.LayoutParams(
@@ -53,7 +54,6 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
 
-        // Amarillo mientras carga para evitar destello blanco
         webView.setBackgroundColor(Color.rgb(255, 196, 0));
 
         WebSettings settings = webView.getSettings();
@@ -62,7 +62,9 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
-        // SPLASH AMARILLO
+        // Puente entre Android y YossiHub
+        webView.addJavascriptInterface(new YossiHubBridge(), "YossiHub");
+
         splashView = new FrameLayout(this);
         splashView.setBackgroundColor(Color.rgb(255, 196, 0));
 
@@ -71,7 +73,6 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
 
-        // LOGO
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.mipmap.ic_launcher);
         logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
@@ -87,29 +88,21 @@ public class MainActivity extends Activity {
 
         splashView.addView(logo, logoParams);
 
-        // Primero WebView y encima el splash
         root.addView(webView);
         root.addView(splashView);
 
         setContentView(root);
 
         webView.setWebViewClient(new WebViewClient() {
-
             @Override
             public void onPageFinished(WebView webView, String url) {
                 super.onPageFinished(webView, url);
 
                 pageLoaded = true;
-
-                // La página ya está lista.
-                // Solo quitamos el splash cuando también hayan pasado
-                // los 4 segundos.
                 showWebsite();
             }
         });
 
-        // A los 4 segundos intentamos quitar el splash.
-        // Si la web todavía carga, el splash permanece.
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -121,54 +114,12 @@ public class MainActivity extends Activity {
         webView.loadUrl(HOME_URL);
     }
 
-    private void requestNotificationPermission() {
+    private void refreshFcmToken() {
+        FirebaseMessaging.getInstance().getToken()
+                .addOnCompleteListener(task -> {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (!task.isSuccessful() || task.getResult() == null) {
+                        return;
+                    }
 
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-
-                requestPermissions(
-                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                        1001
-                );
-            }
-        }
-    }
-
-    private void showWebsite() {
-
-        // No mostrar la web hasta que:
-        // 1. La página haya terminado de cargar.
-        // 2. Hayan pasado los 4 segundos del splash.
-        if (!pageLoaded || !splashTimeElapsed) {
-            return;
-        }
-
-        webView.setBackgroundColor(Color.WHITE);
-        splashView.setVisibility(View.GONE);
-    }
-
-    @Override
-    public void onBackPressed() {
-
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-
-        handler.removeCallbacksAndMessages(null);
-
-        if (webView != null) {
-            webView.destroy();
-            webView = null;
-        }
-
-        super.onDestroy();
-    }
-}
+                    fcm
