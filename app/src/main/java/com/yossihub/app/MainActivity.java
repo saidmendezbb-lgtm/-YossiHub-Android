@@ -263,10 +263,22 @@ public class MainActivity extends Activity {
             return false;
         }
 
-        android.widget.Toast.makeText(
+        android.content.ClipboardManager clipboard =
+        (android.content.ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+
+android.content.ClipData clip =
+        android.content.ClipData.newPlainText(
+                "URL MAPA",
+                url
+        );
+
+clipboard.setPrimaryClip(clip);
+
+android.widget.Toast.makeText(
         MainActivity.this,
-        "URL MAPA:\n" + url,
-        android.widget.Toast.LENGTH_LONG
+        "URL del mapa copiada",
+        android.widget.Toast.LENGTH_SHORT
 ).show();
         try {
 
