@@ -47,7 +47,8 @@ public class MainActivity extends Activity {
 
     private final Handler handler =
             new Handler(Looper.getMainLooper());
-
+    private String notificationRole = "";
+private String notificationTarget = "";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
