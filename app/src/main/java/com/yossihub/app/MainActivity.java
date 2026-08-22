@@ -2,10 +2,11 @@ package com.yossihub.app;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.pm.PackageManager;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
-import android.net.Uri;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,6 +14,7 @@ import android.os.Looper;
 import android.view.View;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -64,8 +66,10 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
-        // Comunicación entre la página y la APK
-        webView.addJavascriptInterface(new YossiHubBridge(), "YossiHub");
+        webView.addJavascriptInterface(
+                new YossiHubBridge(),
+                "YossiHub"
+        );
 
         splashView = new FrameLayout(this);
         splashView.setBackgroundColor(Color.rgb(255, 196, 0));
@@ -84,7 +88,10 @@ public class MainActivity extends Activity {
         );
 
         FrameLayout.LayoutParams logoParams =
-                new FrameLayout.LayoutParams(logoSize, logoSize);
+                new FrameLayout.LayoutParams(
+                        logoSize,
+                        logoSize
+                );
 
         logoParams.gravity = android.view.Gravity.CENTER;
 
@@ -97,116 +104,279 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
 
+            /*
+             * Android moderno.
+             */
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            public boolean shouldOverrideUrlLoading(
+                    WebView view,
+                    WebResourceRequest request
+            ) {
 
-                if (url == null) {
+                if (request == null ||
+                        request.getUrl() == null) {
                     return false;
                 }
 
-                try {
+                return handleExternalUrl(
+                        request.getUrl().toString()
+                );
+            }
 
-                    // Abrir enlaces intent:// fuera de YOSSI HUB
-                    if (url.startsWith("intent://")) {
+            /*
+             * Compatibilidad con versiones anteriores.
+             */
+            @Override
+            public boolean shouldOverrideUrlLoading(
+                    WebView view,
+                    String url
+            ) {
 
-                        Intent intent = Intent.parseUri(
-                                url,
-                                Intent.URI_INTENT_SCHEME
-                        );
-
-                        try {
-                            startActivity(intent);
-
-                        } catch (Exception e) {
-
-                            String fallback =
-                                    intent.getStringExtra("browser_fallback_url");
-
-                            if (fallback != null && !fallback.isEmpty()) {
-
-                                startActivity(
-                                        new Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse(fallback)
-                                        )
-                                );
-
-                            } else {
-
-                                String httpsUrl =
-                                        url.replaceFirst(
-                                                "^intent://",
-                                                "https://"
-                                        );
-
-                                int marker =
-                                        httpsUrl.indexOf("#Intent;");
-
-                                if (marker >= 0) {
-                                    httpsUrl =
-                                            httpsUrl.substring(0, marker);
-                                }
-
-                                startActivity(
-                                        new Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse(httpsUrl)
-                                        )
-                                );
-                            }
-                        }
-
-                        return true;
-                    }
-
-                    // Abrir Google Maps y otras aplicaciones externas
-                    if (url.startsWith("google.navigation:")
-                            || url.startsWith("geo:")
-                            || url.startsWith("market:")
-                            || url.startsWith("whatsapp:")
-                            || url.startsWith("tel:")
-                            || url.startsWith("mailto:")) {
-
-                        Intent externalIntent =
-                                new Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse(url)
-                                );
-
-                        startActivity(externalIntent);
-
-                        return true;
-                    }
-
-                } catch (Exception ignored) {
-                    return true;
-                }
-
-                return false;
+                return handleExternalUrl(url);
             }
 
             @Override
-            public void onPageFinished(WebView webView, String url) {
+            public void onPageFinished(
+                    WebView view,
+                    String url
+            ) {
 
-                super.onPageFinished(webView, url);
+                super.onPageFinished(view, url);
 
                 pageLoaded = true;
                 showWebsite();
             }
         });
 
-        handler.postDelayed(new Runnable() {
+        handler.postDelayed(() -> {
 
-            @Override
-            public void run() {
-
-                splashTimeElapsed = true;
-                showWebsite();
-            }
+            splashTimeElapsed = true;
+            showWebsite();
 
         }, SPLASH_DURATION);
 
         webView.loadUrl(HOME_URL);
+    }
+
+    /*
+     * IMPORTANTE:
+     *
+     * Los enlaces externos se abren fuera de WebView.
+     * YOSSI HUB NO navega hacia ellos.
+     *
+     * De esta manera, cuando Google Maps se cierre
+     * o el conductor pulse Atrás, vuelve a la pantalla
+     * que ya estaba abierta dentro de YOSSI HUB.
+     */
+    private boolean handleExternalUrl(String url) {
+
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+
+            /*
+             * GOOGLE MAPS / INTENT
+             */
+            if (url.startsWith("intent://")) {
+
+                Intent parsedIntent = Intent.parseUri(
+                        url,
+                        Intent.URI_INTENT_SCHEME
+                );
+
+                /*
+                 * Intentamos abrir directamente la aplicación
+                 * indicada por el enlace.
+                 */
+                try {
+
+                    startActivity(parsedIntent);
+                    return true;
+
+                } catch (ActivityNotFoundException e) {
+
+                    /*
+                     * Si esa aplicación no está disponible,
+                     * buscamos el enlace alternativo.
+                     */
+                    String fallback =
+                            parsedIntent.getStringExtra(
+                                    "browser_fallback_url"
+                            );
+
+                    if (fallback != null &&
+                            !fallback.trim().isEmpty()) {
+
+                        Intent browserIntent =
+                                new Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(fallback)
+                                );
+
+                        startActivity(browserIntent);
+
+                        return true;
+                    }
+
+                    /*
+                     * Última alternativa:
+                     * convertir intent:// en https://
+                     */
+                    String httpsUrl =
+                            url.replaceFirst(
+                                    "^intent://",
+                                    "https://"
+                            );
+
+                    int intentMarker =
+                            httpsUrl.indexOf("#Intent;");
+
+                    if (intentMarker >= 0) {
+                        httpsUrl =
+                                httpsUrl.substring(
+                                        0,
+                                        intentMarker
+                                );
+                    }
+
+                    Intent browserIntent =
+                            new Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse(httpsUrl)
+                            );
+
+                    startActivity(browserIntent);
+
+                    return true;
+                }
+            }
+
+            /*
+             * GOOGLE NAVIGATION
+             */
+            if (url.startsWith("google.navigation:")) {
+
+                Intent mapsIntent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
+
+                mapsIntent.setPackage(
+                        "com.google.android.apps.maps"
+                );
+
+                try {
+
+                    startActivity(mapsIntent);
+
+                } catch (ActivityNotFoundException e) {
+
+                    mapsIntent.setPackage(null);
+                    startActivity(mapsIntent);
+                }
+
+                return true;
+            }
+
+            /*
+             * GEO
+             */
+            if (url.startsWith("geo:")) {
+
+                Intent mapsIntent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
+
+                mapsIntent.setPackage(
+                        "com.google.android.apps.maps"
+                );
+
+                try {
+
+                    startActivity(mapsIntent);
+
+                } catch (ActivityNotFoundException e) {
+
+                    mapsIntent.setPackage(null);
+                    startActivity(mapsIntent);
+                }
+
+                return true;
+            }
+
+            /*
+             * Google Maps HTTPS.
+             *
+             * Esto evita que Maps cargue dentro de YOSSI HUB.
+             */
+            if (url.startsWith(
+                    "https://www.google.com/maps"
+            ) ||
+                    url.startsWith(
+                            "https://maps.google.com"
+                    )) {
+
+                Intent mapsIntent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
+
+                mapsIntent.setPackage(
+                        "com.google.android.apps.maps"
+                );
+
+                try {
+
+                    startActivity(mapsIntent);
+
+                } catch (ActivityNotFoundException e) {
+
+                    mapsIntent.setPackage(null);
+                    startActivity(mapsIntent);
+                }
+
+                return true;
+            }
+
+            /*
+             * OTRAS APLICACIONES EXTERNAS
+             */
+            if (url.startsWith("whatsapp:")
+                    || url.startsWith("tel:")
+                    || url.startsWith("mailto:")
+                    || url.startsWith("market:")) {
+
+                Intent externalIntent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
+
+                startActivity(externalIntent);
+
+                return true;
+            }
+
+        } catch (Exception e) {
+
+            /*
+             * No dejamos que una URL externa defectuosa
+             * rompa o bloquee la WebView.
+             */
+            return true;
+        }
+
+        /*
+         * Las páginas normales continúan dentro
+         * de YOSSI HUB.
+         */
+        return false;
     }
 
     private void refreshFcmToken() {
@@ -238,7 +408,10 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String getFcmToken() {
-            return fcmToken == null ? "" : fcmToken;
+
+            return fcmToken == null
+                    ? ""
+                    : fcmToken;
         }
 
         @JavascriptInterface
@@ -268,7 +441,8 @@ public class MainActivity extends Activity {
 
     private void showWebsite() {
 
-        if (!pageLoaded || !splashTimeElapsed) {
+        if (!pageLoaded ||
+                !splashTimeElapsed) {
             return;
         }
 
@@ -279,10 +453,13 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
 
-        if (webView != null && webView.canGoBack()) {
+        if (webView != null &&
+                webView.canGoBack()) {
+
             webView.goBack();
 
         } else {
+
             super.onBackPressed();
         }
     }
@@ -293,6 +470,7 @@ public class MainActivity extends Activity {
         handler.removeCallbacksAndMessages(null);
 
         if (webView != null) {
+
             webView.destroy();
             webView = null;
         }
