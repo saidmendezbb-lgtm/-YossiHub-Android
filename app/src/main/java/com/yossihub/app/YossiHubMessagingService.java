@@ -17,8 +17,9 @@ import com.google.firebase.messaging.RemoteMessage;
 public class YossiHubMessagingService extends FirebaseMessagingService {
 
     private static final String TAG = "YossiHubFCM";
-    private static final String CHANNEL_ID = "yossihub_notifications";
-
+    private static final String CHANNEL_ADMIN = "yossihub_admin";
+private static final String CHANNEL_OWNER = "yossihub_owner";
+private static final String CHANNEL_DRIVER = "yossihub_driver";
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);
@@ -27,7 +28,17 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
 
         String title = "YossiHub";
         String body = "Tienes una nueva notificación";
+         String role = "";
 
+if (!remoteMessage.getData().isEmpty()
+        && remoteMessage.getData().containsKey("role")) {
+
+    role = remoteMessage.getData().get("role");
+
+    if (role == null) {
+        role = "";
+    }
+}
         if (remoteMessage.getNotification() != null) {
             if (remoteMessage.getNotification().getTitle() != null) {
                 title = remoteMessage.getNotification().getTitle();
@@ -47,9 +58,29 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
                 body = remoteMessage.getData().get("body");
             }
         }
+         String roleLabel = "";
 
+if (role.equalsIgnoreCase("admin") ||
+        role.equalsIgnoreCase("administrator")) {
+
+    roleLabel = "ADMINISTRADOR";
+
+} else if (role.equalsIgnoreCase("owner") ||
+        role.equalsIgnoreCase("propietario")) {
+
+    roleLabel = "PROPIETARIO";
+
+} else if (role.equalsIgnoreCase("driver") ||
+        role.equalsIgnoreCase("conductor")) {
+
+    roleLabel = "CONDUCTOR";
+}
+
+if (!roleLabel.isEmpty()) {
+    title = roleLabel + " • " + title;
+}
         createNotificationChannel();
-        showNotification(title, body, remoteMessage.getData());
+        showNotification(title, body, role, remoteMessage.getData());
     }
 
     @Override
@@ -59,8 +90,7 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
         Log.d(TAG, "Nuevo token FCM: " + token);
     }
 
-    private void showNotification(String title, String body, java.util.Map<String, String> data) {
-
+private void showNotification(String title, String body, String role, java.util.Map<String, String> data) {
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         for (java.util.Map.Entry<String, String> entry : data.entrySet()) {
@@ -73,9 +103,20 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
+        String channelId = CHANNEL_DRIVER;
 
+if (role.equalsIgnoreCase("admin") ||
+        role.equalsIgnoreCase("administrator")) {
+
+    channelId = CHANNEL_ADMIN;
+
+} else if (role.equalsIgnoreCase("owner") ||
+        role.equalsIgnoreCase("propietario")) {
+
+    channelId = CHANNEL_OWNER;
+}
         NotificationCompat.Builder builder =
-                new NotificationCompat.Builder(this, CHANNEL_ID)
+                new NotificationCompat.Builder(this, channelId)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)
                         .setContentTitle(title)
                         .setContentText(body)
@@ -99,22 +140,47 @@ public class YossiHubMessagingService extends FirebaseMessagingService {
 
     private void createNotificationChannel() {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "Notificaciones de YossiHub",
-                    NotificationManager.IMPORTANCE_HIGH
-            );
+        NotificationChannel adminChannel = new NotificationChannel(
+                CHANNEL_ADMIN,
+                "YossiHub • Administrador",
+                NotificationManager.IMPORTANCE_HIGH
+        );
 
-            channel.setDescription("Notificaciones push de YossiHub");
+        adminChannel.setDescription(
+                "Notificaciones para administradores de YossiHub"
+        );
 
-            NotificationManager notificationManager =
-                    getSystemService(NotificationManager.class);
+        NotificationChannel ownerChannel = new NotificationChannel(
+                CHANNEL_OWNER,
+                "YossiHub • Propietario",
+                NotificationManager.IMPORTANCE_HIGH
+        );
 
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(channel);
-            }
+        ownerChannel.setDescription(
+                "Notificaciones para propietarios de YossiHub"
+        );
+
+        NotificationChannel driverChannel = new NotificationChannel(
+                CHANNEL_DRIVER,
+                "YossiHub • Conductor",
+                NotificationManager.IMPORTANCE_HIGH
+        );
+
+        driverChannel.setDescription(
+                "Notificaciones para conductores de YossiHub"
+        );
+
+        NotificationManager notificationManager =
+                getSystemService(NotificationManager.class);
+
+        if (notificationManager != null) {
+
+            notificationManager.createNotificationChannel(adminChannel);
+            notificationManager.createNotificationChannel(ownerChannel);
+            notificationManager.createNotificationChannel(driverChannel);
         }
+    }
     }
 }
