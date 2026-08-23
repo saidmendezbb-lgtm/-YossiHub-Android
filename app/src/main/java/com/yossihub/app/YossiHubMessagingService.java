@@ -117,7 +117,7 @@ if (role.equalsIgnoreCase("admin") ||
 }
         NotificationCompat.Builder builder =
                 new NotificationCompat.Builder(this, channelId)
-                        .setSmallIcon(R.drawable.ic_yossihub_notification)
+                        .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle(title)
                         .setContentText(body)
                         .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
