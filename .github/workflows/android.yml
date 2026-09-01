@@ -2,9 +2,11 @@ name: YossiHub Play Store AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ "main", "principal" ]
 
 jobs:
-  build:
+  build-play-aab:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,14 +24,14 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restaurar keystore
+      - name: Restaurar clave de firma
         shell: bash
         run: |
-          echo "${{ secrets.YOSSIHUB_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/yossihub-release.jks"
+          echo "${{ secrets.YOSSIHUB_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/yossihub-upload.jks"
 
       - name: Compilar AAB firmado
         env:
-          YOSSIHUB_KEYSTORE_PATH: ${{ runner.temp }}/yossihub-release.jks
+          YOSSIHUB_KEYSTORE_PATH: ${{ runner.temp }}/yossihub-upload.jks
           YOSSIHUB_KEYSTORE_PASSWORD: ${{ secrets.YOSSIHUB_KEYSTORE_PASSWORD }}
           YOSSIHUB_KEY_ALIAS: ${{ secrets.YOSSIHUB_KEY_ALIAS }}
           YOSSIHUB_KEY_PASSWORD: ${{ secrets.YOSSIHUB_KEY_PASSWORD }}
@@ -38,5 +40,6 @@ jobs:
       - name: Guardar AAB
         uses: actions/upload-artifact@v4
         with:
-          name: YossiHub-V456-PlayStore-AAB
+          name: YossiHub-V457-PlayStore-AAB
           path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
