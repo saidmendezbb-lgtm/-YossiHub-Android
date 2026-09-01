@@ -11,14 +11,29 @@ android {
         applicationId 'com.yossihub.app'
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName '1.0.0'
+        versionCode 456
+        versionName '4.56'
+    }
+
+    signingConfigs {
+        release {
+            def ksPath = System.getenv('YOSSIHUB_KEYSTORE_PATH')
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword System.getenv('YOSSIHUB_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('YOSSIHUB_KEY_ALIAS')
+                keyPassword System.getenv('YOSSIHUB_KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (System.getenv('YOSSIHUB_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
