@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace 'com.yossihub.app'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'com.yossihub.app'
         minSdk 24
-        targetSdk 35
-        versionCode 456
-        versionName '4.56'
+        targetSdk 36
+        versionCode 457
+        versionName '4.57'
     }
 
     signingConfigs {
