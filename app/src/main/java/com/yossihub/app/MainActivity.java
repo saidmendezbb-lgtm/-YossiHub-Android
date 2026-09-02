@@ -3,6 +3,7 @@ package com.yossihub.app;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -28,7 +29,6 @@ import android.widget.ImageView;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
-import java.io.IOException;
 
 import com.google.firebase.messaging.FirebaseMessaging;
 
@@ -124,45 +124,53 @@ public class MainActivity extends Activity {
                     @Override
                     public boolean onShowFileChooser(
                             WebView webView,
-                            ValueCallback<Uri[]> filePathCallback,
+                            ValueCallback<Uri[]> callback,
                             FileChooserParams fileChooserParams
                     ) {
 
+                        /*
+                         * Cerrar cualquier selector anterior que haya quedado abierto.
+                         */
                         if (MainActivity.this.filePathCallback != null) {
-                            MainActivity.this.filePathCallback.onReceiveValue(null);
+                            try {
+                                MainActivity.this.filePathCallback.onReceiveValue(null);
+                            } catch (Exception ignored) {
+                            }
                         }
 
-                        MainActivity.this.filePathCallback = filePathCallback;
+                        MainActivity.this.filePathCallback = callback;
                         cameraImageUri = null;
 
                         /*
-                         * La web avisa directamente al puente
+                         * La página web avisa mediante YossiHub.prepareCamera()
                          * cuando el usuario presiona "Tomar foto".
-                         *
-                         * No dependemos únicamente del atributo
-                         * capture del input HTML.
                          */
                         boolean explicitCameraRequest = forceCameraCapture;
                         forceCameraCapture = false;
 
-                        if (
-                                explicitCameraRequest
-                                ||
-                                (
-                                        fileChooserParams != null
+                        boolean htmlCaptureRequest =
+                                fileChooserParams != null
                                         &&
-                                        fileChooserParams.isCaptureEnabled()
-                                )
-                        ) {
+                                fileChooserParams.isCaptureEnabled();
+
+                        if (explicitCameraRequest || htmlCaptureRequest) {
 
                             try {
 
+                                /*
+                                 * Crear una fotografía temporal dentro del caché
+                                 * privado de YossiHub.
+                                 */
                                 File photo = File.createTempFile(
                                         "yossihub_camera_",
                                         ".jpg",
                                         getCacheDir()
                                 );
 
+                                /*
+                                 * Convertir el archivo en un URI seguro mediante
+                                 * FileProvider.
+                                 */
                                 cameraImageUri =
                                         FileProvider.getUriForFile(
                                                 MainActivity.this,
@@ -170,14 +178,18 @@ public class MainActivity extends Activity {
                                                 photo
                                         );
 
+                                /*
+                                 * Abrir la aplicación de cámara instalada
+                                 * en Android.
+                                 */
                                 Intent cameraIntent =
                                         new Intent(
                                                 android.provider.MediaStore.ACTION_IMAGE_CAPTURE
                                         );
 
                                 /*
-                                 * Preferencia de cámara.
-                                 * Algunos fabricantes pueden ignorarla.
+                                 * Preferencia de cámara frontal o trasera.
+                                 * Algunos fabricantes pueden ignorar esta preferencia.
                                  */
                                 if ("user".equals(pendingCameraFacing)) {
 
@@ -199,16 +211,52 @@ public class MainActivity extends Activity {
                                     );
                                 }
 
+                                /*
+                                 * Android guardará la fotografía directamente
+                                 * en el URI temporal creado arriba.
+                                 */
                                 cameraIntent.putExtra(
                                         android.provider.MediaStore.EXTRA_OUTPUT,
                                         cameraImageUri
                                 );
 
+                                /*
+                                 * Importante para algunos teléfonos Samsung y
+                                 * otras implementaciones de cámara:
+                                 * adjuntamos también el URI como ClipData.
+                                 */
+                                cameraIntent.setClipData(
+                                        ClipData.newRawUri(
+                                                "YossiHub photo",
+                                                cameraImageUri
+                                        )
+                                );
+
+                                /*
+                                 * Permiso temporal únicamente para que la
+                                 * aplicación de cámara pueda escribir la foto.
+                                 */
                                 cameraIntent.addFlags(
                                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                                                 |
                                         Intent.FLAG_GRANT_READ_URI_PERMISSION
                                 );
+
+                                /*
+                                 * Comprobar que exista una aplicación capaz
+                                 * de tomar fotografías.
+                                 */
+                                if (
+                                        cameraIntent.resolveActivity(
+                                                getPackageManager()
+                                        )
+                                                ==
+                                        null
+                                ) {
+
+                                    cancelFileChooser();
+                                    return true;
+                                }
 
                                 startActivityForResult(
                                         cameraIntent,
@@ -217,59 +265,64 @@ public class MainActivity extends Activity {
 
                                 return true;
 
-                            } catch (
-                                    IOException |
-                                    ActivityNotFoundException e
-                            ) {
+                            } catch (Exception e) {
 
+                                /*
+                                 * IMPORTANTE:
+                                 * cualquier problema de FileProvider,
+                                 * SecurityException, cámara, URI, fabricante,
+                                 * etc. queda atrapado aquí.
+                                 *
+                                 * YossiHub NO debe cerrarse.
+                                 */
                                 cameraImageUri = null;
+                                forceCameraCapture = false;
+                                pendingCameraFacing = "environment";
 
-                                MainActivity.this
-                                        .filePathCallback
-                                        .onReceiveValue(null);
-
-                                MainActivity.this.filePathCallback = null;
+                                cancelFileChooser();
 
                                 return true;
                             }
                         }
 
                         /*
-                         * Seleccionar foto:
-                         * continúa usando el selector Android.
+                         * =====================================================
+                         * GALERÍA
+                         * =====================================================
                          */
-                        Intent intent;
-
                         try {
 
-                            intent =
-                                    fileChooserParams != null
-                                            ?
-                                    fileChooserParams.createIntent()
-                                            :
-                                    new Intent(Intent.ACTION_GET_CONTENT);
+                            Intent galleryIntent;
 
-                            if (fileChooserParams == null) {
+                            if (fileChooserParams != null) {
 
-                                intent.addCategory(
+                                galleryIntent =
+                                        fileChooserParams.createIntent();
+
+                            } else {
+
+                                galleryIntent =
+                                        new Intent(
+                                                Intent.ACTION_GET_CONTENT
+                                        );
+
+                                galleryIntent.addCategory(
                                         Intent.CATEGORY_OPENABLE
                                 );
 
-                                intent.setType("image/*");
+                                galleryIntent.setType(
+                                        "image/*"
+                                );
                             }
 
                             startActivityForResult(
-                                    intent,
+                                    galleryIntent,
                                     REQUEST_FILE_CHOOSER
                             );
 
                         } catch (Exception e) {
 
-                            MainActivity.this
-                                    .filePathCallback
-                                    .onReceiveValue(null);
-
-                            MainActivity.this.filePathCallback = null;
+                            cancelFileChooser();
 
                             return true;
                         }
@@ -302,14 +355,14 @@ public class MainActivity extends Activity {
                                 checkSelfPermission(
                                         Manifest.permission.ACCESS_FINE_LOCATION
                                 )
-                                ==
+                                        ==
                                 PackageManager.PERMISSION_GRANTED;
 
                         boolean coarse =
                                 checkSelfPermission(
                                         Manifest.permission.ACCESS_COARSE_LOCATION
                                 )
-                                ==
+                                        ==
                                 PackageManager.PERMISSION_GRANTED;
 
                         if (fine || coarse) {
@@ -345,7 +398,9 @@ public class MainActivity extends Activity {
         );
 
         /*
+         * =====================================================
          * SPLASH
+         * =====================================================
          */
         splashView = new FrameLayout(this);
 
@@ -373,7 +428,7 @@ public class MainActivity extends Activity {
         int logoSize =
                 (int) (
                         180
-                        *
+                                *
                         getResources()
                                 .getDisplayMetrics()
                                 .density
@@ -399,7 +454,9 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         /*
+         * =====================================================
          * WEBVIEW CLIENT
+         * =====================================================
          */
         webView.setWebViewClient(
                 new WebViewClient() {
@@ -412,7 +469,7 @@ public class MainActivity extends Activity {
 
                         if (
                                 request == null
-                                ||
+                                        ||
                                 request.getUrl() == null
                         ) {
 
@@ -478,6 +535,30 @@ public class MainActivity extends Activity {
 
     /*
      * =====================================================
+     * CANCELAR SELECTOR DE ARCHIVOS DE FORMA SEGURA
+     * =====================================================
+     */
+    private void cancelFileChooser() {
+
+        if (filePathCallback != null) {
+
+            try {
+
+                filePathCallback.onReceiveValue(
+                        null
+                );
+
+            } catch (Exception ignored) {
+            }
+
+            filePathCallback = null;
+        }
+
+        cameraImageUri = null;
+    }
+
+    /*
+     * =====================================================
      * ENLACES EXTERNOS
      * =====================================================
      */
@@ -485,7 +566,7 @@ public class MainActivity extends Activity {
 
         if (
                 url == null
-                ||
+                        ||
                 url.trim().isEmpty()
         ) {
 
@@ -514,9 +595,9 @@ public class MainActivity extends Activity {
 
                     if (
                             fallback != null
-                            &&
+                                    &&
                             !fallback.trim().isEmpty()
-                            &&
+                                    &&
                             isGoogleMapsUrl(fallback)
                     ) {
 
@@ -551,7 +632,7 @@ public class MainActivity extends Activity {
 
                         if (
                                 fallback != null
-                                &&
+                                        &&
                                 !fallback.trim().isEmpty()
                         ) {
 
@@ -614,13 +695,13 @@ public class MainActivity extends Activity {
              */
             if (
                     url.startsWith("whatsapp:")
-                    ||
+                            ||
                     url.startsWith("https://wa.me/")
-                    ||
+                            ||
                     url.startsWith("http://wa.me/")
-                    ||
+                            ||
                     url.startsWith("https://api.whatsapp.com/")
-                    ||
+                            ||
                     url.startsWith("http://api.whatsapp.com/")
             ) {
 
@@ -684,9 +765,9 @@ public class MainActivity extends Activity {
              */
             if (
                     url.startsWith("tel:")
-                    ||
+                            ||
                     url.startsWith("mailto:")
-                    ||
+                            ||
                     url.startsWith("market:")
             ) {
 
@@ -789,7 +870,7 @@ public class MainActivity extends Activity {
 
                             if (
                                     !task.isSuccessful()
-                                    ||
+                                            ||
                                     task.getResult() == null
                             ) {
 
@@ -923,7 +1004,7 @@ public class MainActivity extends Activity {
 
             if (
                     !fine
-                    &&
+                            &&
                     !coarse
             ) {
 
@@ -988,7 +1069,7 @@ public class MainActivity extends Activity {
 
             if (
                     pendingGeoCallback != null
-                    &&
+                            &&
                     pendingGeoOrigin != null
             ) {
 
@@ -1013,7 +1094,7 @@ public class MainActivity extends Activity {
 
         if (
                 !pageLoaded
-                ||
+                        ||
                 !splashTimeElapsed
         ) {
 
@@ -1039,7 +1120,7 @@ public class MainActivity extends Activity {
 
         if (
                 webView != null
-                &&
+                        &&
                 webView.canGoBack()
         ) {
 
@@ -1079,89 +1160,114 @@ public class MainActivity extends Activity {
                     filePathCallback == null
             ) {
 
+                cameraImageUri = null;
                 return;
             }
 
             Uri[] results =
                     null;
 
-            /*
-             * FOTO TOMADA CON LA CÁMARA
-             */
-            if (
-                    resultCode
-                            ==
-                    Activity.RESULT_OK
-                    &&
-                    cameraImageUri != null
-                    &&
-                    (
-                            data == null
-                            ||
-                            data.getData() == null
-                    )
-            ) {
+            try {
 
-                results =
-                        new Uri[]{
-                                cameraImageUri
-                        };
-
-            /*
-             * FOTO SELECCIONADA DE GALERÍA
-             */
-            } else if (
-                    resultCode
-                            ==
-                    Activity.RESULT_OK
-                    &&
-                    data != null
-            ) {
-
+                /*
+                 * FOTO TOMADA CON LA CÁMARA
+                 */
                 if (
-                        data.getClipData()
-                                !=
-                        null
-                ) {
-
-                    int count =
-                            data.getClipData()
-                                    .getItemCount();
-
-                    results =
-                            new Uri[count];
-
-                    for (
-                            int i = 0;
-                            i < count;
-                            i++
-                    ) {
-
-                        results[i] =
-                                data.getClipData()
-                                        .getItemAt(i)
-                                        .getUri();
-                    }
-
-                } else if (
-                        data.getData()
-                                !=
-                        null
+                        resultCode
+                                ==
+                        Activity.RESULT_OK
+                                &&
+                        cameraImageUri != null
+                                &&
+                        (
+                                data == null
+                                        ||
+                                data.getData() == null
+                        )
                 ) {
 
                     results =
                             new Uri[]{
-                                    data.getData()
+                                    cameraImageUri
                             };
+
+                /*
+                 * FOTO SELECCIONADA DE GALERÍA
+                 */
+                } else if (
+                        resultCode
+                                ==
+                        Activity.RESULT_OK
+                                &&
+                        data != null
+                ) {
+
+                    if (
+                            data.getClipData()
+                                    !=
+                            null
+                    ) {
+
+                        int count =
+                                data.getClipData()
+                                        .getItemCount();
+
+                        results =
+                                new Uri[count];
+
+                        for (
+                                int i = 0;
+                                i < count;
+                                i++
+                        ) {
+
+                            results[i] =
+                                    data.getClipData()
+                                            .getItemAt(i)
+                                            .getUri();
+                        }
+
+                    } else if (
+                            data.getData()
+                                    !=
+                            null
+                    ) {
+
+                        results =
+                                new Uri[]{
+                                        data.getData()
+                                };
+                    }
                 }
+
+                /*
+                 * Entregar el resultado nuevamente al input HTML.
+                 */
+                filePathCallback.onReceiveValue(
+                        results
+                );
+
+            } catch (Exception ignored) {
+
+                try {
+
+                    filePathCallback.onReceiveValue(
+                            null
+                    );
+
+                } catch (Exception ignoredAgain) {
+                }
+
+            } finally {
+
+                filePathCallback = null;
+                cameraImageUri = null;
+
+                forceCameraCapture = false;
+
+                pendingCameraFacing =
+                        "environment";
             }
-
-            filePathCallback.onReceiveValue(
-                    results
-            );
-
-            filePathCallback = null;
-            cameraImageUri = null;
         }
     }
 
@@ -1176,6 +1282,12 @@ public class MainActivity extends Activity {
         handler.removeCallbacksAndMessages(
                 null
         );
+
+        /*
+         * Si la Activity se destruye mientras hay un selector
+         * pendiente, cerrarlo de forma segura.
+         */
+        cancelFileChooser();
 
         if (
                 webView != null
