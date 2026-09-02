@@ -11,8 +11,8 @@ android {
         applicationId 'com.yossihub.app'
         minSdk 24
         targetSdk 36
-        versionCode 458
-        versionName '4.58'
+        versionCode 459
+        versionName '4.59'
     }
 
     signingConfigs {
