@@ -40,6 +40,6 @@ jobs:
       - name: Guardar AAB
         uses: actions/upload-artifact@v4
         with:
-          name: YossiHub-V457-PlayStore-AAB
+          name: YossiHub-V518-PlayStore-AAB
           path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
