@@ -11,8 +11,8 @@ android {
         applicationId 'com.yossihub.app'
         minSdk 24
         targetSdk 36
-        versionCode 518
-        versionName '5.18'
+        versionCode 520
+        versionName '5.20'
     }
 
     signingConfigs {
@@ -31,15 +31,4 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            if (System.getenv('YOSSIHUB_KEYSTORE_PATH')) {
-                signingConfig signingConfigs.release
-            }
-        }
-    }
-}
-
-dependencies {
-    implementation platform('com.google.firebase:firebase-bom:34.2.0')
-    implementation 'com.google.firebase:firebase-messaging'
-    implementation 'androidx.core:core:1.15.0'
-}
+            if (System.getenv
