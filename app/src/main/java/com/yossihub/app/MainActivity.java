@@ -47,6 +47,8 @@ public class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
+    private String pendingGoogleReturn = "";
+
     private WebView webView;
     private FrameLayout splashView;
     private ValueCallback<Uri[]> filePathCallback;
@@ -161,6 +163,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        readGoogleReturn(getIntent());
 
         getWindow().setStatusBarColor(Color.rgb(20, 24, 28));
         getWindow().getDecorView().setSystemUiVisibility(0);
@@ -384,6 +387,7 @@ public class MainActivity extends Activity {
                 if (isTrustedYossiUrl(url)) {
                     pageLoaded = true;
                     showWebsite();
+                    notifyGoogleReturn();
                 }
             }
         });
@@ -423,7 +427,42 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        loadTrustedUrl(trustedTargetFromIntent(intent));
+        readGoogleReturn(intent);
+        if (!pendingGoogleReturn.isEmpty()) {
+            notifyGoogleReturn();
+        } else {
+            loadTrustedUrl(trustedTargetFromIntent(intent));
+        }
+    }
+
+    private void readGoogleReturn(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
+        Uri uri = intent.getData();
+        if (uri == null || !"yossihub".equals(uri.getScheme())
+                || !"google-return".equals(uri.getHost())
+                || !"/complete".equals(uri.getPath())) return;
+        String flow = uri.getQueryParameter("flow");
+        if (flow != null && flow.matches("[a-f0-9]{64}")) pendingGoogleReturn = flow;
+    }
+
+    private void notifyGoogleReturn() {
+        if (webView == null || !pageLoaded || pendingGoogleReturn.isEmpty()) return;
+        String currentUrl = webView.getUrl();
+        if (!isTrustedYossiUrl(currentUrl)) return;
+        String flow = pendingGoogleReturn;
+        pendingGoogleReturn = "";
+        webView.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('yossihub-google-return',{detail:{id:'" + flow + "'}}));",
+                null);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        notifyGoogleReturn();
+        if (webView != null && pageLoaded && isTrustedYossiUrl(webView.getUrl())) {
+            webView.evaluateJavascript("window.dispatchEvent(new Event('yossihub-app-resumed'));", null);
+        }
     }
 
     private WebResourceResponse blockedResponse() {
@@ -434,7 +473,7 @@ public class MainActivity extends Activity {
     }
 
     /*
-     * Las páginas externas se abren fuera del WebView.
+     * Las pÃ¡ginas externas se abren fuera del WebView.
      * Los esquemas peligrosos se descartan.
      */
     private boolean handleExternalUrl(String url) {
