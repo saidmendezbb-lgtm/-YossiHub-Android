@@ -24,6 +24,8 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceError;
+import android.app.AlertDialog;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
@@ -59,6 +61,8 @@ public class MainActivity extends Activity {
     private volatile String fcmToken = "";
 
     private boolean pageLoaded = false;
+    private boolean mainFrameLoadFailed = false;
+    private boolean connectionDialogVisible = false;
     private boolean splashTimeElapsed = false;
 
     private GeolocationPermissions.Callback pendingGeoCallback;
@@ -377,14 +381,26 @@ public class MainActivity extends Activity {
                     return;
                 }
 
+                mainFrameLoadFailed = false;
+                pageLoaded = false;
                 super.onPageStarted(view, url, favicon);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request != null && request.isForMainFrame()) {
+                    mainFrameLoadFailed = true;
+                    pageLoaded = false;
+                    showConnectionRetryDialog();
+                }
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
 
-                if (isTrustedYossiUrl(url)) {
+                if (!mainFrameLoadFailed && isTrustedYossiUrl(url)) {
                     pageLoaded = true;
                     showWebsite();
                     notifyGoogleReturn();
@@ -473,7 +489,7 @@ public class MainActivity extends Activity {
     }
 
     /*
-     * Las pÃ¡ginas externas se abren fuera del WebView.
+     * Las pÃƒÂ¡ginas externas se abren fuera del WebView.
      * Los esquemas peligrosos se descartan.
      */
     private boolean handleExternalUrl(String url) {
@@ -771,6 +787,31 @@ public class MainActivity extends Activity {
             pendingGeoCallback = null;
             pendingGeoOrigin = null;
         }
+    }
+
+    private void showConnectionRetryDialog() {
+        if (connectionDialogVisible || isFinishing() || isDestroyed()) return;
+        connectionDialogVisible = true;
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) {
+                connectionDialogVisible = false;
+                return;
+            }
+            new AlertDialog.Builder(MainActivity.this)
+                .setTitle("YossiHub")
+                .setMessage("No se pudo conectar con YossiHub. Comprueba tu conexiÃ³n y vuelve a intentarlo.")
+                .setPositiveButton("Reintentar", (dialog, which) -> {
+                    connectionDialogVisible = false;
+                    mainFrameLoadFailed = false;
+                    pageLoaded = false;
+                    if (webView != null) loadTrustedUrl(HOME_URL);
+                })
+                .setNegativeButton("Cerrar", (dialog, which) -> {
+                    connectionDialogVisible = false;
+                })
+                .setOnCancelListener(dialog -> connectionDialogVisible = false)
+                .show();
+        });
     }
 
     private void showWebsite() {
